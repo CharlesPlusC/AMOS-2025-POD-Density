@@ -40,9 +40,10 @@
       min-height: 300px;
     }
     #controls {
-      position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-      background: rgba(255,255,255,0.8); padding: 8px 16px; border-radius: 8px;
+      position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%);
+      background: rgba(255,255,255,0.9); padding: 8px 16px; border-radius: 8px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      z-index: 1000;
     }
     #slider { width: 50vw; }
   </style>
@@ -185,6 +186,17 @@
   ];
   let nSats = trajArr.length;
   let satCount = 18; // Start with 18 satellites (which should be available in combos)
+  
+  // --- Update satNames, satColors, and all plots based on satCount ---
+  function getActiveSatNames() {
+    return combos[satCount] || [];
+  }
+  function getActiveSatColors() {
+    const colorMap = {};
+    satNames.forEach((sat, i) => { colorMap[sat] = satColors[i]; });
+    return getActiveSatNames().map(sat => colorMap[sat]);
+  }
+  
   // initial validation for default satellite count
   validateCombo(satCount);
   const satColors = satNames.map((_,i) => {
@@ -192,16 +204,17 @@
     const idx = Math.round(t*(viridis.length-1));
     return viridis[idx];
   });
-  // Only use index data from the first density time onward (no prepend logic)
+  // Only use index data from April 21st onward
+  const dataStartTime = new Date('2023-04-21T00:00:00');
   const f107_times_all = f107Arr.map(d => new Date(d.datetime));
   const f107_vals_all = f107Arr.map(d => d.f107);
   const kp_times_all = kpArr.map(d => new Date(d.datetime));
   const kp_vals_all = kpArr.map(d => d.kp);
   const dst_times_all = dstArr.map(d => new Date(d.datetime));
   const dst_vals_all = dstArr.map(d => d.dst);
-  const f107_idx0 = f107_times_all.findIndex(t => t >= t0);
-  const kp_idx0 = kp_times_all.findIndex(t => t >= t0);
-  const dst_idx0 = dst_times_all.findIndex(t => t >= t0);
+  const f107_idx0 = f107_times_all.findIndex(t => t >= dataStartTime);
+  const kp_idx0 = kp_times_all.findIndex(t => t >= dataStartTime);
+  const dst_idx0 = dst_times_all.findIndex(t => t >= dataStartTime);
   const f107_times = f107_idx0 === -1 ? [] : f107_times_all.slice(f107_idx0);
   const f107_vals  = f107_idx0 === -1 ? [] : f107_vals_all.slice(f107_idx0);
   const kp_times   = kp_idx0   === -1 ? [] : kp_times_all.slice(kp_idx0);
@@ -311,7 +324,14 @@
   // Densities plot: top half, Dst/Kp/F10.7 each 1/6 in bottom half
   const layout = {
     grid: { rows: 4, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
-    xaxis: { title: 'Time', tickformat: '%Y-%m-%d\n%H:%M', type: 'date', anchor: 'y4', domain: [0,1] },
+    xaxis: { 
+      title: 'Time', 
+      tickformat: '%Y-%m-%d\n%H:%M', 
+      type: 'date', 
+      anchor: 'y4', 
+      domain: [0,1],
+      range: ['2023-04-21T00:00:00', '2023-04-28T23:59:59']
+    },
     yaxis:  { title: 'Density (kg/m³)', tickformat: '.2e', domain: [0.5, 1] },
     yaxis2: { title: 'Dst (nT)', anchor: 'x', domain: [1/3, 0.5] },
     yaxis3: { title: 'Kp Index', dtick: 1, anchor: 'x', domain: [1/6, 1/3] },
@@ -756,7 +776,7 @@
 
   // --- DYNAMIC DENSITY PLOT ---
   // --- Fix: Only add a new point to the density plot when the globe time passes a density time ---
-  // Precompute trajectory times (30s steps)
+  // Precompute trajectory times (60s steps starting from April 21, 2023 00:00:00)
   const trajStart = new Date('2023-04-21T00:00:00');
   const trajTimes = Array.from({length: nSteps}, (_,i) => new Date(trajStart.getTime() + i*60*1000));
   // Density times are already in 'times' (as Date objects)
@@ -1053,6 +1073,25 @@
     Object.keys(dens).forEach(k => {
       if (!['model','mean','times'].includes(k)) satNames.push(k);
     });
+    
+    // Recreate the entire time series plot with new model
+    const newAllTraces = [
+      ...makeDensityTraces(),
+      makeDensityModelTrace(),
+      makeMeanTrace(dens, 'Mean (1)', 'orange'),
+      ...(dens2 ? [ makeMeanTrace(dens2, 'Mean (2)', 'purple') ] : []),
+      dstTrace,
+      kpTrace,
+      f107Trace
+    ];
+    try {
+      Plotly.newPlot('timeseries', newAllTraces, layout);
+      Plotly.Plots.resize('timeseries');
+      window.dispatchEvent(new Event('resize'));
+    } catch (e) {
+      console.error('Plotly.newPlot error:', e);
+    }
+    
     // Update all plots to reflect new model
     updateFrame(+slider.value);
     updateAllPlots(+slider.value);
@@ -1063,6 +1102,8 @@
   satCountSelect.value = satCount; // Use satCount instead of nSats
   satCountSelect.onchange = function() {
     satCount = parseInt(satCountSelect.value);
+    console.log('Satellite count changed to:', satCount);
+    console.log('Active satellites:', getActiveSatNames());
     // validate anomaly spacing for new selection
     validateCombo(satCount);
     const i = +slider.value;
@@ -1116,17 +1157,6 @@
     updateFrame(i);
     updateAllPlots(i);
   };
-  // --- Update satNames, satColors, and all plots based on satCount ---
-  function getActiveSatNames() {
-    return combos[satCount] || [];
-  }
-  function getActiveSatColors() {
-    const colorMap = {};
-    satNames.forEach((sat, i) => { colorMap[sat] = satColors[i]; });
-    return getActiveSatNames().map(sat => colorMap[sat]);
-  }
-  // --- Modify all plot code to use getActiveSatNames() and getActiveSatColors() ---
-  // In densityTraces, orbitPoints, latlonTraces, and all update functions, replace satNames/satColors with getActiveSatNames()/getActiveSatColors() as appropriate.
 })();
 </script>
 </body>
