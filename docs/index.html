@@ -158,7 +158,8 @@
     <div class="wrap">
       <aside>
         <div class="card stack">
-          <h2 id="rms_title">RMS Error Explorer <span class="small" style="font-weight:400;opacity:0.8">(density/drag will appear here)</span></h2>
+          <h2 id="rms_title">RMS Error Explorer</h2>
+          <p class="small" style="margin:4px 0 0 0;opacity:0.9">POD noise tiers (3D RMS): Low ≈ 0.30 m · Medium ≈ 0.458 m · High ≈ 1.80 m</p>
           <p class="small" id="rms_blurb" style="margin-top:-6px;opacity:0.85;">
             Compare configurations — set parameters for Panel A and Panel B below.
             <br>Placeholder: Briefly explain that RMS is predicted model error (%) vs. number of satellites and fit-span (orbits) using MSIS-derived densities.
@@ -177,15 +178,15 @@
             </div>
             <div>
               <label>AMR (m²/kg)</label>
-              <input id="rmsA_amr" type="number" min="0" max="1" step="0.001" value="0.10"/>
+              <input id="rmsA_amr" type="number" min="0" max="1" step="0.001" value="0.005"/>
             </div>
             <div>
               <label>Altitude (km)</label>
-              <input id="rmsA_alt" type="number" min="300" max="700" step="1" value="450"/>
+              <input id="rmsA_alt" type="number" min="300" max="700" step="1" value="630"/>
             </div>
             <div>
               <label>F10.7 (sfu)</label>
-              <input id="rmsA_f107" type="number" min="60" max="300" step="1" value="130"/>
+              <input id="rmsA_f107" type="number" min="60" max="300" step="1" value="100"/>
             </div>
             <div>
               <label>Ap</label>
@@ -206,7 +207,7 @@
             </div>
             <div>
               <label>AMR (m²/kg)</label>
-              <input id="rmsB_amr" type="number" min="0" max="1" step="0.001" value="0.10"/>
+              <input id="rmsB_amr" type="number" min="0" max="1" step="0.001" value="0.005"/>
             </div>
             <div>
               <label>Altitude (km)</label>
@@ -214,7 +215,7 @@
             </div>
             <div>
               <label>F10.7 (sfu)</label>
-              <input id="rmsB_f107" type="number" min="60" max="300" step="1" value="130"/>
+              <input id="rmsB_f107" type="number" min="60" max="300" step="1" value="100"/>
             </div>
             <div>
               <label>Ap</label>
@@ -226,11 +227,11 @@
       <main>
         <div class="card">
           <h3>RMS % Error vs Fit-span and #Sats — Panel A</h3>
-          <div id="rms_plot_A" style="height:48vh"></div>
+          <div id="rms_plot_A" style="height:48vh; width:100%"></div>
         </div>
         <div class="card">
           <h3>RMS % Error vs Fit-span and #Sats — Panel B</h3>
-          <div id="rms_plot_B" style="height:48vh"></div>
+          <div id="rms_plot_B" style="height:48vh; width:100%"></div>
         </div>
       </main>
     </div>
@@ -351,7 +352,7 @@
       return (Number.isFinite(c) && c>0) ? c : null;
     }
 
-    // --- RMS model constants (from notebook) ---
+    // --- RMS model constants  ---
     const E_MAX = 97.0, E_MIN = 1.8, D50 = 2.1e-7, KAPPA = 1.12;
     const B_UNASSIM = 0.6;
     const CAL = {
@@ -382,8 +383,14 @@
       return E_MIN + L_above * Math.pow(2, -(f-1)) * Math.pow(N, -b);
     }
     function calibrated_error_surface_js(d, f, N, tier){
-      // Use raw surface (no alpha/beta) to match notebook scale
-      return error_surface_js(d, f, N, B_UNASSIM);
+      // Notebook parity: use fixed exponent on N and apply per-tier (alpha, beta)
+      // 1) Compute base surface with unassimilated exponent b=0.6
+      const base = error_surface_js(d, f, N, B_UNASSIM);
+      // 2) Apply per-tier linear calibration to the above-floor component
+      const cal = CAL[tier] || CAL.medium; // {alpha, beta}
+      const E = E_MIN + cal.alpha * (base - E_MIN) + cal.beta;
+      // 3) Clamp to [E_MIN, E_MAX]
+      return Math.max(E_MIN, Math.min(E_MAX, E));
     }
 
     function makeHeatData(tier, amr, alt_km, f107, ap, fMax=5, nMax=20){
@@ -424,6 +431,7 @@
       }));
 
       const layout = {
+        autosize:true,
         margin:{t:30,l:60,r:10,b:40},
         paper_bgcolor:'rgba(0,0,0,0)',
         plot_bgcolor:'rgba(0,0,0,0)',
@@ -885,17 +893,13 @@
         const fB    = parseFloat($('rmsB_f107').value);
         const apB   = parseFloat($('rmsB_ap').value);
 
-        // Compute and update title with densities/drag
+        // Compute densities/drag
         let rhoA, rhoB;
         try{ rhoA = rho_kg_m3_from_f107_ap(altA, fA, apA); }catch(e){ rhoA = NaN; }
         try{ rhoB = rho_kg_m3_from_f107_ap(altB, fB, apB); }catch(e){ rhoB = NaN; }
         const vA = orbitalSpeed(altA), vB = orbitalSpeed(altB);
         const dA = dragAccel(rhoA, amrA, vA);
         const dB = dragAccel(rhoB, amrB, vB);
-        const titleEl = document.getElementById('rms_title');
-        if(titleEl){
-          titleEl.innerHTML = `RMS Error Explorer <span class="small" style="font-weight:400;opacity:0.85">· ρ<sub>A</sub>=${fmtSI(rhoA)} kg/m³, a<sub>D,A</sub>=${fmtSI(dA)} m/s² · ρ<sub>B</sub>=${fmtSI(rhoB)} kg/m³, a<sub>D,B</sub>=${fmtSI(dB)} m/s²</span>`;
-        }
 
         const dataA = makeHeatData(tierA, amrA, altA, fA, apA);
         const dataB = makeHeatData(tierB, amrB, altB, fB, apB);
@@ -905,8 +909,16 @@
         const zmin = Math.min(...allZ);
         const zmax = Math.max(...allZ);
 
-        renderHeatmap('rms_plot_A', `Tier=${tierA} · AMR=${amrA.toFixed(3)} m²/kg · Alt=${Math.round(altA)} km · F10.7=${Math.round(fA)} · Ap=${Math.round(apA)}`, dataA, zmin, zmax);
-        renderHeatmap('rms_plot_B', `Tier=${tierB} · AMR=${amrB.toFixed(3)} m²/kg · Alt=${Math.round(altB)} km · F10.7=${Math.round(fB)} · Ap=${Math.round(apB)}`, dataB, zmin, zmax);
+        renderHeatmap(
+          'rms_plot_A',
+          `Tier=${tierA} · AMR=${amrA.toFixed(3)} m²/kg · Alt=${Math.round(altA)} km · F10.7=${Math.round(fA)} · Ap=${Math.round(apA)} · ρ=${fmtSI(rhoA)} kg/m³ · a_D=${fmtSI(dA)} m/s²`,
+          dataA, zmin, zmax
+        );
+        renderHeatmap(
+          'rms_plot_B',
+          `Tier=${tierB} · AMR=${amrB.toFixed(3)} m²/kg · Alt=${Math.round(altB)} km · F10.7=${Math.round(fB)} · Ap=${Math.round(apB)} · ρ=${fmtSI(rhoB)} kg/m³ · a_D=${fmtSI(dB)} m/s²`,
+          dataB, zmin, zmax
+        );
       }catch(err){
         console.error(err);
         const layoutMsg = {
