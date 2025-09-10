@@ -88,7 +88,7 @@
     <option value="3">3</option>
     <option value="6">6</option>
     <option value="9">9</option>
-    <option value="18">18</option>
+    <option value="18" selected>18</option>
   </select>
 </div>
 <script>
@@ -184,7 +184,7 @@
     '#35b779', '#6ece58', '#b5de2b', '#fde725'
   ];
   let nSats = trajArr.length;
-  let satCount = nSats;
+  let satCount = 18; // Start with 18 satellites (which should be available in combos)
   // initial validation for default satellite count
   validateCombo(satCount);
   const satColors = satNames.map((_,i) => {
@@ -1060,12 +1060,31 @@
 
   // --- SATELLITE COUNT DROPDOWN HANDLER ---
   const satCountSelect = document.getElementById('sat-count-select');
-  satCountSelect.value = nSats;
+  satCountSelect.value = satCount; // Use satCount instead of nSats
   satCountSelect.onchange = function() {
     satCount = parseInt(satCountSelect.value);
     // validate anomaly spacing for new selection
     validateCombo(satCount);
     const i = +slider.value;
+    
+    // Recreate the entire time series plot with new satellite selection
+    const newAllTraces = [
+      ...makeDensityTraces(),
+      makeDensityModelTrace(),
+      makeMeanTrace(dens, 'Mean (1)', 'orange'),
+      ...(dens2 ? [ makeMeanTrace(dens2, 'Mean (2)', 'purple') ] : []),
+      dstTrace,
+      kpTrace,
+      f107Trace
+    ];
+    try {
+      Plotly.newPlot('timeseries', newAllTraces, layout);
+      Plotly.Plots.resize('timeseries');
+      window.dispatchEvent(new Event('resize'));
+    } catch (e) {
+      console.error('Plotly.newPlot error:', e);
+    }
+    
     // re-render globe and map with new satCount
     const currentTime = trajTimes[i];
     if (earthImg.complete && earthImg.naturalWidth > 0) {
