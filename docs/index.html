@@ -194,8 +194,22 @@
     // Recreate the entire time series plot with both models
     const [minTime, maxTime] = getDataTimeRange();
     const updatedLayout = {
-      ...layout,
-      xaxis: { ...layout.xaxis, range: [minTime, maxTime] }
+      grid: { rows: 3, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
+      xaxis: { 
+        title: 'Time', 
+        tickformat: '%Y-%m-%d\n%H:%M', 
+        type: 'date', 
+        anchor: 'y3', 
+        domain: [0,1],
+        range: [minTime, maxTime]
+      },
+      yaxis:  { title: 'Density (kg/m³)', tickformat: '.2e', domain: [0.5, 1] },
+      yaxis2: { title: 'Dst (nT)', anchor: 'x', domain: [0.25, 0.5] },
+      yaxis3: { title: 'Kp Index', dtick: 1, anchor: 'x', domain: [0, 0.25] },
+      legend: { orientation: 'h', y: -0.2 },
+      margin: { t: 40, r: 20, l: 60, b: 60 },
+      hovermode: 'x unified',
+      showlegend: true
     };
     const newAllTraces = [
       ...makeDensityTraces(),
@@ -203,8 +217,7 @@
       makeMeanTrace(dens, 'Mean (1)', 'orange'),
       ...(dens2 ? [ makeMeanTrace(dens2, 'Mean (2)', 'purple') ] : []),
       dstTrace,
-      kpTrace,
-      f107Trace
+      kpTrace
     ];
     try {
       Plotly.newPlot('timeseries', newAllTraces, updatedLayout);
@@ -424,7 +437,6 @@
     legend: { orientation: 'h', y: -0.2 },
     margin: { t: 40, r: 20, l: 60, b: 60 },
     hovermode: 'x unified',
-    title: 'Satellite Densities, Dst, Kp, F10.7 vs. Time',
     showlegend: true
   };
   try {
@@ -1042,18 +1054,6 @@
         y: computeMean({times: times.slice(0,k+1), ...Object.fromEntries(getActiveSatNames().map(s=>[s,dens2[s].slice(0,k+1)]))})
       });
     }
-    // F10.7
-    const f107_idx = f107_times.findIndex(t => t > currentTime);
-    const f107_x = f107_idx === -1 ? f107_times : f107_times.slice(0, f107_idx);
-    const f107_y = f107_idx === -1 ? f107_vals : f107_vals.slice(0, f107_idx);
-    traces.push({
-      x: f107_x, y: f107_y,
-      mode: 'lines+markers', name: 'F10.7',
-      line: { color: '#1f77b4', width: 2 },
-      marker: { size: 4 },
-      hovertemplate: 'F10.7: %{y}<extra></extra>',
-      xaxis: 'x', yaxis: 'y4',
-    });
     // Kp
     const kp_idx = kp_times.findIndex(t => t > currentTime);
     const kp_x = kp_idx === -1 ? kp_times : kp_times.slice(0, kp_idx);
@@ -1081,8 +1081,22 @@
     try {
       const [minTime, maxTime] = getDataTimeRange();
       const updatedLayout = {
-        ...layout,
-        xaxis: { ...layout.xaxis, range: [minTime, maxTime] }
+        grid: { rows: 3, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
+        xaxis: { 
+          title: 'Time', 
+          tickformat: '%Y-%m-%d\n%H:%M', 
+          type: 'date', 
+          anchor: 'y3', 
+          domain: [0,1],
+          range: [minTime, maxTime]
+        },
+        yaxis:  { title: 'Density (kg/m³)', tickformat: '.2e', domain: [0.5, 1] },
+        yaxis2: { title: 'Dst (nT)', anchor: 'x', domain: [0.25, 0.5] },
+        yaxis3: { title: 'Kp Index', dtick: 1, anchor: 'x', domain: [0, 0.25] },
+        legend: { orientation: 'h', y: -0.2 },
+        margin: { t: 40, r: 20, l: 60, b: 60 },
+        hovermode: 'x unified',
+        showlegend: true
       };
       Plotly.react('timeseries', traces, updatedLayout);
       Plotly.Plots.resize('timeseries');
@@ -1178,8 +1192,22 @@
     // Recreate the entire time series plot with new model
     const [minTime, maxTime] = getDataTimeRange();
     const updatedLayout = {
-      ...layout,
-      xaxis: { ...layout.xaxis, range: [minTime, maxTime] }
+      grid: { rows: 3, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
+      xaxis: { 
+        title: 'Time', 
+        tickformat: '%Y-%m-%d\n%H:%M', 
+        type: 'date', 
+        anchor: 'y3', 
+        domain: [0,1],
+        range: [minTime, maxTime]
+      },
+      yaxis:  { title: 'Density (kg/m³)', tickformat: '.2e', domain: [0.5, 1] },
+      yaxis2: { title: 'Dst (nT)', anchor: 'x', domain: [0.25, 0.5] },
+      yaxis3: { title: 'Kp Index', dtick: 1, anchor: 'x', domain: [0, 0.25] },
+      legend: { orientation: 'h', y: -0.2 },
+      margin: { t: 40, r: 20, l: 60, b: 60 },
+      hovermode: 'x unified',
+      showlegend: true
     };
     const newAllTraces = [
       ...makeDensityTraces(),
@@ -1187,8 +1215,7 @@
       makeMeanTrace(dens, 'Mean (1)', 'orange'),
       ...(dens2 ? [ makeMeanTrace(dens2, 'Mean (2)', 'purple') ] : []),
       dstTrace,
-      kpTrace,
-      f107Trace
+      kpTrace
     ];
     try {
       Plotly.newPlot('timeseries', newAllTraces, updatedLayout);
@@ -1221,8 +1248,22 @@
     // Recreate the entire time series plot with new satellite selection
     const [minTime, maxTime] = getDataTimeRange();
     const updatedLayout = {
-      ...layout,
-      xaxis: { ...layout.xaxis, range: [minTime, maxTime] }
+      grid: { rows: 3, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
+      xaxis: { 
+        title: 'Time', 
+        tickformat: '%Y-%m-%d\n%H:%M', 
+        type: 'date', 
+        anchor: 'y3', 
+        domain: [0,1],
+        range: [minTime, maxTime]
+      },
+      yaxis:  { title: 'Density (kg/m³)', tickformat: '.2e', domain: [0.5, 1] },
+      yaxis2: { title: 'Dst (nT)', anchor: 'x', domain: [0.25, 0.5] },
+      yaxis3: { title: 'Kp Index', dtick: 1, anchor: 'x', domain: [0, 0.25] },
+      legend: { orientation: 'h', y: -0.2 },
+      margin: { t: 40, r: 20, l: 60, b: 60 },
+      hovermode: 'x unified',
+      showlegend: true
     };
     const newAllTraces = [
       ...makeDensityTraces(),
@@ -1230,8 +1271,7 @@
       makeMeanTrace(dens, 'Mean (1)', 'orange'),
       ...(dens2 ? [ makeMeanTrace(dens2, 'Mean (2)', 'purple') ] : []),
       dstTrace,
-      kpTrace,
-      f107Trace
+      kpTrace
     ];
     console.log('Creating', newAllTraces.length, 'traces for', getActiveSatNames().length, 'satellites');
     try {
