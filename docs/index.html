@@ -40,10 +40,41 @@
       min-height: 300px;
     }
     #controls {
-      position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%);
-      background: rgba(255,255,255,0.9); padding: 8px 16px; border-radius: 8px;
+      position: absolute; 
+      bottom: 20px; 
+      right: 20px; 
+      width: calc(50% - 40px);
+      background: rgba(255,255,255,0.9); 
+      padding: 12px 16px; 
+      border-radius: 8px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
       z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .control-row label {
+      font-weight: bold;
+      white-space: nowrap;
+    }
+    .control-row select {
+      flex: 1;
+      min-width: 120px;
+    }
+    .plot-title {
+      text-align: center;
+      font-weight: bold;
+      font-size: 16px;
+      margin: 5px 0;
+      background: rgba(255,255,255,0.8);
+      padding: 5px;
+      border-radius: 4px;
     }
     #slider { width: 50vw; }
   </style>
@@ -51,46 +82,55 @@
 <body>
 <div id="container">
   <div id="leftcol">
+    <div class="plot-title">Inertial view</div>
     <div id="globe"></div>
+    <div class="plot-title">Lat/Lon</div>
     <div id="latlonmap"></div>
   </div>
   <div id="rightcol">
+    <div class="plot-title">EDR Density Time Series, Dst, Kp</div>
     <div id="timeseries"></div>
   </div>
 </div>
 <div id="controls">
-  <input id="slider" type="range" min="0" max="1" step="1" value="0">
-  <button id="play">▶️</button>
-  <button id="pause">⏸️</button>
-  <span id="time-label"></span>
-  <label for="density-model-select" style="margin-left:1em;">POD Noise Strength:</label>
-  <select id="density-model-select">
-    <option value="commercial">High Noise</option>
-    <option value="lowNoise">Low Noise</option>
-    <option value="mediumNoise">Medium Noise</option>
-    <option value="assimilated_commercial">Assimilated High Noise</option>
-    <option value="assimilated_lowNoise">Assimilated Low Noise</option>
-    <option value="assimilated_mediumNoise">Assimilated Medium Noise</option>
-  </select>
-  <label for="density-model-select-2" style="margin-left:1em;">Compare:</label>
-  <select id="density-model-select-2">
-    <option value="">None</option>
-    <option value="commercial">High Noise</option>
-    <option value="lowNoise">Low Noise</option>
-    <option value="mediumNoise">Medium Noise</option>
-    <option value="assimilated_commercial">Assimilated High Noise</option>
-    <option value="assimilated_lowNoise">Assimilated Low Noise</option>
-    <option value="assimilated_mediumNoise">Assimilated Medium Noise</option>
-  </select>
-  <label for="sat-count-select" style="margin-left:1em;"># Sats:</label>
-  <select id="sat-count-select">
-    <option value="1">1</option>
-    <option value="2">2</option>
-    <option value="3">3</option>
-    <option value="6">6</option>
-    <option value="9">9</option>
-    <option value="18" selected>18</option>
-  </select>
+  <div class="control-row">
+    <input id="slider" type="range" min="0" max="1" step="1" value="0" style="flex: 2;">
+    <button id="play">▶️</button>
+    <button id="pause">⏸️</button>
+    <span id="time-label" style="font-weight: bold;"></span>
+  </div>
+  <div class="control-row">
+    <label for="density-model-select">Time-Series 1:</label>
+    <select id="density-model-select">
+      <option value="commercial">High Noise</option>
+      <option value="lowNoise">Low Noise</option>
+      <option value="mediumNoise">Medium Noise</option>
+      <option value="assimilated_commercial">Assimilated High Noise</option>
+      <option value="assimilated_lowNoise">Assimilated Low Noise</option>
+      <option value="assimilated_mediumNoise">Assimilated Medium Noise</option>
+    </select>
+    <label for="sat-count-select"># Sats:</label>
+    <select id="sat-count-select">
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+      <option value="6">6</option>
+      <option value="9">9</option>
+      <option value="18" selected>18</option>
+    </select>
+  </div>
+  <div class="control-row">
+    <label for="density-model-select-2">Time Series 2:</label>
+    <select id="density-model-select-2">
+      <option value="">None</option>
+      <option value="commercial">High Noise</option>
+      <option value="lowNoise">Low Noise</option>
+      <option value="mediumNoise">Medium Noise</option>
+      <option value="assimilated_commercial">Assimilated High Noise</option>
+      <option value="assimilated_lowNoise">Assimilated Low Noise</option>
+      <option value="assimilated_mediumNoise">Assimilated Medium Noise</option>
+    </select>
+  </div>
 </div>
 <script>
 (async function() {
@@ -150,6 +190,30 @@
   secondarySelect.onchange = function() {
     secondaryModel = secondarySelect.value;
     dens2 = secondaryModel ? getDens(secondaryModel) : null;
+    
+    // Recreate the entire time series plot with both models
+    const [minTime, maxTime] = getDataTimeRange();
+    const updatedLayout = {
+      ...layout,
+      xaxis: { ...layout.xaxis, range: [minTime, maxTime] }
+    };
+    const newAllTraces = [
+      ...makeDensityTraces(),
+      makeDensityModelTrace(),
+      makeMeanTrace(dens, 'Mean (1)', 'orange'),
+      ...(dens2 ? [ makeMeanTrace(dens2, 'Mean (2)', 'purple') ] : []),
+      dstTrace,
+      kpTrace,
+      f107Trace
+    ];
+    try {
+      Plotly.newPlot('timeseries', newAllTraces, updatedLayout);
+      Plotly.Plots.resize('timeseries');
+      window.dispatchEvent(new Event('resize'));
+    } catch (e) {
+      console.error('Plotly.newPlot error:', e);
+    }
+    
     // refresh plots with both models
     updateFrame(+slider.value);
     updateAllPlots(+slider.value);
@@ -160,7 +224,6 @@
   trajArr.forEach((satObj, idx) => {
     satIndexMap[satObj.name] = idx;
   });
-  const f107Arr = dashData.f107;
   const kpArr = dashData.kp;
   const dstArr = dashData.dst;
 
@@ -175,7 +238,7 @@
     console.error("Density data is missing or malformed!", dens);
   }
 
-  // --- DENSITY, F10.7, KP, DST DATA PREP ---
+  // --- DENSITY, KP, DST DATA PREP ---
   const times = dens.times.map(t => new Date(t));
   const timeLabels = dens.times;
   const t0 = times[0];
@@ -189,12 +252,20 @@
   
   // --- Update satNames, satColors, and all plots based on satCount ---
   function getActiveSatNames() {
-    return combos[satCount] || [];
+    const result = combos[satCount] || [];
+    console.log('getActiveSatNames called with satCount:', satCount, 'returning:', result);
+    return result;
   }
   function getActiveSatColors() {
+    const names = getActiveSatNames();
+    const allSatNames = Object.keys(dens).filter(k => !['model','mean','times'].includes(k));
     const colorMap = {};
-    satNames.forEach((sat, i) => { colorMap[sat] = satColors[i]; });
-    return getActiveSatNames().map(sat => colorMap[sat]);
+    allSatNames.forEach((sat, i) => { 
+      const t = i/(allSatNames.length-1);
+      const idx = Math.round(t*(viridis.length-1));
+      colorMap[sat] = viridis[idx];
+    });
+    return names.map(sat => colorMap[sat]);
   }
   
   // initial validation for default satellite count
@@ -206,59 +277,62 @@
   });
   // Only use index data from April 21st onward
   const dataStartTime = new Date('2023-04-21T00:00:00');
-  const f107_times_all = f107Arr.map(d => new Date(d.datetime));
-  const f107_vals_all = f107Arr.map(d => d.f107);
   const kp_times_all = kpArr.map(d => new Date(d.datetime));
   const kp_vals_all = kpArr.map(d => d.kp);
   const dst_times_all = dstArr.map(d => new Date(d.datetime));
   const dst_vals_all = dstArr.map(d => d.dst);
-  const f107_idx0 = f107_times_all.findIndex(t => t >= dataStartTime);
   const kp_idx0 = kp_times_all.findIndex(t => t >= dataStartTime);
   const dst_idx0 = dst_times_all.findIndex(t => t >= dataStartTime);
-  const f107_times = f107_idx0 === -1 ? [] : f107_times_all.slice(f107_idx0);
-  const f107_vals  = f107_idx0 === -1 ? [] : f107_vals_all.slice(f107_idx0);
   const kp_times   = kp_idx0   === -1 ? [] : kp_times_all.slice(kp_idx0);
   const kp_vals    = kp_idx0   === -1 ? [] : kp_vals_all.slice(kp_idx0);
   const dst_times  = dst_idx0  === -1 ? [] : dst_times_all.slice(dst_idx0);
   const dst_vals   = dst_idx0  === -1 ? [] : dst_vals_all.slice(dst_idx0);
 
   // --- PLOTLY SUBPLOTS FOR ALL TIME SERIES ---
-  // Order: Density, Dst, Kp, F10.7
+  // Order: Density, Dst, Kp
   function makeDensityTraces() {
     const names = getActiveSatNames();
+    console.log('makeDensityTraces called with active satellites:', names);
     const traces = [];
     // primary model (blue)
     names.forEach(sat => {
-      traces.push({
-        x: times, y: dens[sat],
-        mode: 'lines',
-        name: sat,
-        line: { color: 'rgba(109,193,255,0.4)', width: 2 },
-        legendgroup: sat,
-        hovertemplate: `${sat}: %{y:.2e}<extra></extra>`,
-        xaxis: 'x', yaxis: 'y1'
-      });
+      if (dens[sat]) {
+        traces.push({
+          x: times, y: dens[sat],
+          mode: 'lines',
+          name: sat,
+          line: { color: 'rgba(109,193,255,0.4)', width: 2 },
+          legendgroup: sat,
+          hovertemplate: `${sat}: %{y:.2e}<extra></extra>`,
+          xaxis: 'x', yaxis: 'y1'
+        });
+      } else {
+        console.warn('No density data for satellite:', sat);
+      }
     });
     // secondary model (green), if selected
     if (dens2) {
       names.forEach(sat => {
-        traces.push({
-          x: times, y: dens2[sat],
-          mode: 'lines',
-          name: sat + ' (cmp)',
-          line: { color: 'rgba(0,200,100,0.4)', width: 2 },
-          legendgroup: sat + '_cmp',
-          hovertemplate: `${sat} cmp: %{y:.2e}<extra></extra>`,
-          xaxis: 'x', yaxis: 'y1'
-        });
+        if (dens2[sat]) {
+          traces.push({
+            x: times, y: dens2[sat],
+            mode: 'lines',
+            name: sat + ' (cmp)',
+            line: { color: 'rgba(0,200,100,0.4)', width: 2 },
+            legendgroup: sat + '_cmp',
+            hovertemplate: `${sat} cmp: %{y:.2e}<extra></extra>`,
+            xaxis: 'x', yaxis: 'y1'
+          });
+        }
       });
     }
+    console.log('makeDensityTraces returning', traces.length, 'traces');
     return traces;
   }
   function makeDensityModelTrace() {
     return {
       x: times, y: dens.model,
-      mode: 'lines', name: 'Model',
+      mode: 'lines', name: 'HASDM',
       line: { color: 'black', width: 2 },
       legendgroup: 'model',
       hovertemplate: 'Model: %{y:.2e}<extra></extra>',
@@ -304,38 +378,49 @@
     hovertemplate: 'Kp: %{y}<extra></extra>',
     xaxis: 'x', yaxis: 'y3',
   };
-  const f107Trace = {
-    x: f107_times, y: f107_vals,
-    mode: 'lines+markers', name: 'F10.7',
-    line: { color: '#1f77b4', width: 2 },
-    marker: { size: 4 },
-    hovertemplate: 'F10.7: %{y}<extra></extra>',
-    xaxis: 'x', yaxis: 'y4',
-  };
   const allTraces = [
     ...makeDensityTraces(),
     makeDensityModelTrace(),
     makeMeanTrace(dens, 'Mean (1)', 'orange'),
     ...(dens2 ? [ makeMeanTrace(dens2, 'Mean (2)', 'purple') ] : []),
     dstTrace,
-    kpTrace,
-    f107Trace
+    kpTrace
   ];
-  // Densities plot: top half, Dst/Kp/F10.7 each 1/6 in bottom half
+  // Function to get the actual data time range
+  function getDataTimeRange() {
+    const allTimes = [...times];
+    if (kp_times.length > 0) allTimes.push(...kp_times);
+    if (dst_times.length > 0) allTimes.push(...dst_times);
+    
+    if (allTimes.length === 0) {
+      return ['2023-04-21T00:00:00', '2023-04-28T23:59:59'];
+    }
+    
+    const minTime = new Date(Math.min(...allTimes.map(t => new Date(t).getTime())));
+    const maxTime = new Date(Math.max(...allTimes.map(t => new Date(t).getTime())));
+    
+    // Add small padding (1 hour on each side)
+    const paddedMin = new Date(minTime.getTime() - 60*60*1000);
+    const paddedMax = new Date(maxTime.getTime() + 60*60*1000);
+    
+    return [paddedMin.toISOString(), paddedMax.toISOString()];
+  }
+
+  // Densities plot: top half, Dst/Kp in bottom half (no F10.7)
+  const [minTime, maxTime] = getDataTimeRange();
   const layout = {
-    grid: { rows: 4, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
+    grid: { rows: 3, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
     xaxis: { 
       title: 'Time', 
       tickformat: '%Y-%m-%d\n%H:%M', 
       type: 'date', 
-      anchor: 'y4', 
+      anchor: 'y3', 
       domain: [0,1],
-      range: ['2023-04-21T00:00:00', '2023-04-28T23:59:59']
+      range: [minTime, maxTime]
     },
     yaxis:  { title: 'Density (kg/m³)', tickformat: '.2e', domain: [0.5, 1] },
-    yaxis2: { title: 'Dst (nT)', anchor: 'x', domain: [1/3, 0.5] },
-    yaxis3: { title: 'Kp Index', dtick: 1, anchor: 'x', domain: [1/6, 1/3] },
-    yaxis4: { title: 'F10.7 (sfu)', anchor: 'x', domain: [0, 1/6] },
+    yaxis2: { title: 'Dst (nT)', anchor: 'x', domain: [0.25, 0.5] },
+    yaxis3: { title: 'Kp Index', dtick: 1, anchor: 'x', domain: [0, 0.25] },
     legend: { orientation: 'h', y: -0.2 },
     margin: { t: 40, r: 20, l: 60, b: 60 },
     hovermode: 'x unified',
@@ -820,6 +905,10 @@
     // Find the latest density time <= currentTime
     let idx = 0;
     while (idx < times.length-1 && currentTime >= times[idx+1]) idx++;
+    if (!dens[sat]) {
+      console.warn('No density data for satellite:', sat, 'in current model:', currentModel);
+      return 1e-13; // fallback value
+    }
     return dens[sat][idx];
   }
 
@@ -917,10 +1006,10 @@
     }));
     traces.push({
       x: times.slice(0, k+1), y: dens.model.slice(0, k+1),
-      mode: 'lines', name: 'Model',
+      mode: 'lines', name: 'HASDM',
       line: { color: 'black', width: 1 },
       legendgroup: 'model',
-      hovertemplate: 'Model: %{y:.2e}<extra></extra>',
+      hovertemplate: 'HASDM: %{y:.2e}<extra></extra>',
       xaxis: 'x', yaxis: 'y1',
     });
     traces.push({
@@ -990,7 +1079,12 @@
       xaxis: 'x', yaxis: 'y2',
     });
     try {
-      Plotly.react('timeseries', traces, layout);
+      const [minTime, maxTime] = getDataTimeRange();
+      const updatedLayout = {
+        ...layout,
+        xaxis: { ...layout.xaxis, range: [minTime, maxTime] }
+      };
+      Plotly.react('timeseries', traces, updatedLayout);
       Plotly.Plots.resize('timeseries');
       window.dispatchEvent(new Event('resize'));
     } catch (e) {
@@ -1064,17 +1158,29 @@
   const modelSelect = document.getElementById('density-model-select');
   modelSelect.value = currentModel;
   modelSelect.onchange = function() {
+    console.log('POD Noise model changed from', currentModel, 'to', modelSelect.value);
     currentModel = modelSelect.value;
     dens = getDens(currentModel);
-    // Update times, satNames, etc.
-    for (let i = 0; i < dens.times.length; ++i) times[i] = new Date(dens.times[i]);
-    // Recompute satNames
-    while (satNames.length) satNames.pop();
+    console.log('New density data loaded for model:', currentModel);
+    
+    // Update times array with new density times
+    times.length = 0; // Clear the array
+    dens.times.forEach(t => times.push(new Date(t)));
+    
+    // Recompute satNames from new density data
+    satNames.length = 0; // Clear the array
     Object.keys(dens).forEach(k => {
       if (!['model','mean','times'].includes(k)) satNames.push(k);
     });
+    console.log('Available satellites in new model:', satNames);
+    console.log('Active satellites for current count:', getActiveSatNames());
     
     // Recreate the entire time series plot with new model
+    const [minTime, maxTime] = getDataTimeRange();
+    const updatedLayout = {
+      ...layout,
+      xaxis: { ...layout.xaxis, range: [minTime, maxTime] }
+    };
     const newAllTraces = [
       ...makeDensityTraces(),
       makeDensityModelTrace(),
@@ -1085,7 +1191,7 @@
       f107Trace
     ];
     try {
-      Plotly.newPlot('timeseries', newAllTraces, layout);
+      Plotly.newPlot('timeseries', newAllTraces, updatedLayout);
       Plotly.Plots.resize('timeseries');
       window.dispatchEvent(new Event('resize'));
     } catch (e) {
@@ -1101,14 +1207,23 @@
   const satCountSelect = document.getElementById('sat-count-select');
   satCountSelect.value = satCount; // Use satCount instead of nSats
   satCountSelect.onchange = function() {
+    const oldSatCount = satCount;
     satCount = parseInt(satCountSelect.value);
-    console.log('Satellite count changed to:', satCount);
+    console.log('Satellite count changed from', oldSatCount, 'to:', satCount);
+    console.log('Available combos:', Object.keys(combos));
     console.log('Active satellites:', getActiveSatNames());
+    console.log('All available satellites:', Object.keys(dens).filter(k => !['model','mean','times'].includes(k)));
+    
     // validate anomaly spacing for new selection
     validateCombo(satCount);
     const i = +slider.value;
     
     // Recreate the entire time series plot with new satellite selection
+    const [minTime, maxTime] = getDataTimeRange();
+    const updatedLayout = {
+      ...layout,
+      xaxis: { ...layout.xaxis, range: [minTime, maxTime] }
+    };
     const newAllTraces = [
       ...makeDensityTraces(),
       makeDensityModelTrace(),
@@ -1118,8 +1233,9 @@
       kpTrace,
       f107Trace
     ];
+    console.log('Creating', newAllTraces.length, 'traces for', getActiveSatNames().length, 'satellites');
     try {
-      Plotly.newPlot('timeseries', newAllTraces, layout);
+      Plotly.newPlot('timeseries', newAllTraces, updatedLayout);
       Plotly.Plots.resize('timeseries');
       window.dispatchEvent(new Event('resize'));
     } catch (e) {
