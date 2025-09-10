@@ -64,17 +64,30 @@
     .spacer{flex:1}
     .mono{font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
     a, a:visited{color:var(--accent)}
+    /* Tabs */
+    .tabs{display:flex; gap:8px; align-items:center}
+    .tab{padding:6px 10px; border:1px solid var(--grid); border-radius:10px; background:var(--chip); cursor:pointer; color:var(--ink)}
+    .tab.active{background:var(--accent); color:#081019; border-color:transparent}
+    .page{display:none}
+    .page.active{display:block}
+    .twocol{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+    .control-grid{display:grid; grid-template-columns: repeat(3, 1fr); gap:8px}
+    .control-grid label{font-size:12px; color:var(--muted)}
   </style>
 </head>
 <body>
   <header>
     <div class="title">Satellite Density Dashboard</div>
-    <div class="row small">
+    <div class="row small tabs">
+      <button class="tab active" id="tab-storm">StormTimeDensityInversion</button>
+      <button class="tab" id="tab-rms">RMS Error Explorer</button>
+      <span class="spacer"></span>
       <span id="status" class="mono">Loading…</span>
     </div>
   </header>
 
-  <div class="wrap">
+  <div class="page active" id="page-storm">
+    <div class="wrap">
     <!-- Controls -->
     <aside>
       <div class="card stack">
@@ -138,6 +151,89 @@
         <div id="timeseries"></div>
       </div>
     </main>
+    </div>
+  </div>
+
+  <div class="page" id="page-rms">
+    <div class="wrap">
+      <aside>
+        <div class="card stack">
+          <h2 id="rms_title">RMS Error Explorer <span class="small" style="font-weight:400;opacity:0.8">(density/drag will appear here)</span></h2>
+          <p class="small" id="rms_blurb" style="margin-top:-6px;opacity:0.85;">
+            Compare configurations — set parameters for Panel A and Panel B below.
+            <br>Placeholder: Briefly explain that RMS is predicted model error (%) vs. number of satellites and fit-span (orbits) using MSIS-derived densities.
+          </p>
+        </div>
+        <div class="card stack">
+          <h3>Panel A</h3>
+          <div class="control-grid">
+            <div>
+              <label>Noise tier (calibration)</label>
+              <select id="rmsA_tier">
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+            <div>
+              <label>AMR (m²/kg)</label>
+              <input id="rmsA_amr" type="number" min="0" max="1" step="0.001" value="0.10"/>
+            </div>
+            <div>
+              <label>Altitude (km)</label>
+              <input id="rmsA_alt" type="number" min="300" max="700" step="1" value="450"/>
+            </div>
+            <div>
+              <label>F10.7 (sfu)</label>
+              <input id="rmsA_f107" type="number" min="60" max="300" step="1" value="130"/>
+            </div>
+            <div>
+              <label>Ap</label>
+              <input id="rmsA_ap" type="number" min="0" max="400" step="1" value="10"/>
+            </div>
+          </div>
+        </div>
+        <div class="card stack">
+          <h3>Panel B</h3>
+          <div class="control-grid">
+            <div>
+              <label>Noise tier (calibration)</label>
+              <select id="rmsB_tier">
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low" selected>Low</option>
+              </select>
+            </div>
+            <div>
+              <label>AMR (m²/kg)</label>
+              <input id="rmsB_amr" type="number" min="0" max="1" step="0.001" value="0.10"/>
+            </div>
+            <div>
+              <label>Altitude (km)</label>
+              <input id="rmsB_alt" type="number" min="300" max="700" step="1" value="550"/>
+            </div>
+            <div>
+              <label>F10.7 (sfu)</label>
+              <input id="rmsB_f107" type="number" min="60" max="300" step="1" value="130"/>
+            </div>
+            <div>
+              <label>Ap</label>
+              <input id="rmsB_ap" type="number" min="0" max="400" step="1" value="10"/>
+            </div>
+          </div>
+        </div>
+      </aside>
+      <main>
+        <div class="card">
+          <h3>RMS % Error vs Fit-span and #Sats — Panel A</h3>
+          <div id="rms_plot_A" style="height:48vh"></div>
+        </div>
+        <div class="card">
+          <h3>RMS % Error vs Fit-span and #Sats — Panel B</h3>
+          <div id="rms_plot_B" style="height:48vh"></div>
+        </div>
+      </main>
+    </div>
   </div>
 
   <script>
@@ -145,6 +241,23 @@
     /* ---------- Utilities ---------- */
     const $ = (id)=>document.getElementById(id);
     const status = $('status');
+
+    // Tabs logic
+    const tabStorm = $('tab-storm');
+    const tabRms = $('tab-rms');
+    const pageStorm = $('page-storm');
+    const pageRms = $('page-rms');
+    function activateTab(which){
+      if(which==='storm'){
+        tabStorm.classList.add('active'); tabRms.classList.remove('active');
+        pageStorm.classList.add('active'); pageRms.classList.remove('active');
+      } else {
+        tabRms.classList.add('active'); tabStorm.classList.remove('active');
+        pageRms.classList.add('active'); pageStorm.classList.remove('active');
+      }
+    }
+    tabStorm.onclick = ()=>activateTab('storm');
+    tabRms.onclick = ()=>activateTab('rms');
 
     // Color helpers
     const viridis = ['#440154','#482878','#3e4989','#31688e','#26828e','#1f9e89','#35b779','#6ece58','#b5de2b','#fde725'];
@@ -172,6 +285,170 @@
     const MEAN_B_COLOR = '#c53030';                 // solid red for series B mean
     const HASDM_COLOR  = '#e6e6e6';                 // neutral for HASDM model
 
+    // Custom NIPY_SPECTRAL-like colorscale for better low–mid contrast
+    const NIPY_SPECTRAL = [
+      [0.00, '#000000'],
+      [0.05, '#00035b'],
+      [0.10, '#0000ff'],
+      [0.20, '#00b5ff'],
+      [0.35, '#00ff6f'],
+      [0.50, '#aaff00'],
+      [0.65, '#f7ff00'],
+      [0.80, '#ff6f00'],
+      [0.90, '#ff0000'],
+      [1.00, '#ffffff']
+    ];
+
+    // ---- MSIS precomputed LUT (docs/msis_lut.json) ----
+    // Shape: rho[alt][f107][ap], with grids in MSIS_LUT.grid.{alt_km,f107,ap}
+    let MSIS_LUT = null;
+
+    async function loadMSISLUT(){
+      try{
+        const resp = await fetch('./msis_lut.json?v=' + Date.now(), {cache:'no-store'});
+        if(!resp.ok) throw new Error('HTTP '+resp.status);
+        const lut = await resp.json();
+        // Basic shape checks
+        if(lut && lut.grid && Array.isArray(lut.grid.alt_km) && Array.isArray(lut.grid.f107) && Array.isArray(lut.grid.ap) && Array.isArray(lut.rho)){
+          MSIS_LUT = lut;
+          console.log('Loaded MSIS LUT:', {alts: lut.grid.alt_km.length, f107: lut.grid.f107.length, ap: lut.grid.ap.length});
+        }
+      }catch(e){
+        console.warn('MSIS LUT not found; RMS page disabled.', e);
+        MSIS_LUT = null;
+        status.textContent = '⚠️ MSIS LUT missing — RMS page disabled';
+      }
+    }
+
+    // Locate bracketing indices and linear weights for 1D array (monotonic ascending)
+    function bracketIdxW(arr, x){
+      const n = arr.length;
+      if(x <= arr[0]) return {i0:0, i1:0, w:0};
+      if(x >= arr[n-1]) return {i0:n-1, i1:n-1, w:0};
+      let lo = 0, hi = n-1;
+      while(hi - lo > 1){
+        const mid = (lo + hi) >> 1;
+        if(arr[mid] <= x) lo = mid; else hi = mid;
+      }
+      const i0 = lo, i1 = hi;
+      const w = (x - arr[i0]) / (arr[i1] - arr[i0]);
+      return {i0, i1, w};
+    }
+
+    // Trilinear interpolation over rho[alt][f107][ap]
+    function rho_from_LUT(alt_km, f107, ap){
+      if(!MSIS_LUT) return null;
+      const A = MSIS_LUT.grid.alt_km, F = MSIS_LUT.grid.f107, P = MSIS_LUT.grid.ap;
+      const R = MSIS_LUT.rho;
+      const {i0:a0, i1:a1, w:wa} = bracketIdxW(A, alt_km);
+      const {i0:f0, i1:f1, w:wf} = bracketIdxW(F, f107);
+      const {i0:p0, i1:p1, w:wp} = bracketIdxW(P, ap);
+      const c000=R[a0][f0][p0], c100=R[a1][f0][p0], c010=R[a0][f1][p0], c110=R[a1][f1][p0];
+      const c001=R[a0][f0][p1], c101=R[a1][f0][p1], c011=R[a0][f1][p1], c111=R[a1][f1][p1];
+      const c00=c000*(1-wa)+c100*wa, c01=c001*(1-wa)+c101*wa, c10=c010*(1-wa)+c110*wa, c11=c011*(1-wa)+c111*wa;
+      const c0=c00*(1-wf)+c10*wf, c1=c01*(1-wf)+c11*wf;
+      const c=c0*(1-wp)+c1*wp;
+      return (Number.isFinite(c) && c>0) ? c : null;
+    }
+
+    // --- RMS model constants (from notebook) ---
+    const E_MAX = 97.0, E_MIN = 1.8, D50 = 2.1e-7, KAPPA = 1.12;
+    const B_UNASSIM = 0.6;
+    const CAL = {
+      high:   {alpha: 0.8433088828715762, beta: -0.32224430545188654},
+      medium: {alpha: 0.21070487695101514, beta: -1.433357778151463},
+      low:    {alpha: 0.10466223404590143, beta: -1.591827565464284}
+    };
+
+    function rho_kg_m3_from_f107_ap(alt_km, f107, ap){
+      const rhoLUT = rho_from_LUT(alt_km, f107, ap);
+      if(rhoLUT === null){
+        throw new Error('MSIS LUT not loaded or query out of bounds');
+      }
+      return rhoLUT;
+    }
+    const RE = 6371e3, MU = 3.986004418e14, CD = 2.2;
+    function orbitalSpeed(alt_km){ const r = RE + alt_km*1e3; return Math.sqrt(MU/r); }
+    function dragAccel(rho, amr, v){ return 0.5 * CD * amr * rho * v*v; }
+    function fmtSI(x){
+      if(!Number.isFinite(x) || x===0) return '0';
+      const e = Math.floor(Math.log10(Math.abs(x)));
+      const m = x / Math.pow(10, e);
+      return `${m.toFixed(3)}e${e}`;
+    }
+
+    function error_surface_js(d, f, N, b){
+      const L_above = (E_MAX - E_MIN) / (1.0 + Math.pow(d/D50, KAPPA));
+      return E_MIN + L_above * Math.pow(2, -(f-1)) * Math.pow(N, -b);
+    }
+    function calibrated_error_surface_js(d, f, N, tier){
+      // Use raw surface (no alpha/beta) to match notebook scale
+      return error_surface_js(d, f, N, B_UNASSIM);
+    }
+
+    function makeHeatData(tier, amr, alt_km, f107, ap, fMax=5, nMax=20){
+      const rho = rho_kg_m3_from_f107_ap(alt_km, f107, ap);
+      const v   = orbitalSpeed(alt_km);
+      const d   = dragAccel(rho, amr, v);
+      const xF = Array.from({length:Math.min(5, fMax||5)}, (_,i)=>i+1);
+      const yN = Array.from({length:Math.min(20,nMax||20)},(_,i)=>i+1);
+      const z  = yN.map(N=> xF.map(f=> calibrated_error_surface_js(d, f, N, tier)) );
+      return {x:xF, y:yN, z};
+    }
+
+    function renderHeatmap(elId, hdr, data, zmin, zmax){
+      // Nice, continuous look
+      const heat = {
+        type:'heatmap', x:data.x, y:data.y, z:data.z,
+        colorscale: NIPY_SPECTRAL,
+        zmin:zmin, zmax:zmax, zauto:false,
+        zsmooth:'best',
+        colorbar:{
+          title:'RMS %',
+          thickness:14,
+          len:0.9,
+          tickmode:'array',
+          tickvals: buildColorbarTicks(zmin, zmax),
+          ticktext: buildColorbarTicks(zmin, zmax).map(v=>String(v))
+        }
+      };
+
+      // Overlay isolines at 5%, 10%, 20%
+      const isoLevels = [5, 10, 20].filter(L => L>=zmin && L<=zmax);
+      const isoTraces = isoLevels.map(L=>({
+        type:'contour', x:data.x, y:data.y, z:data.z,
+        contours:{start:L, end:L, size:1, coloring:'lines', showlabels:true, labelfont:{color:'#eeeeee', size:10}},
+        line:{color:'#ffffff', width:1.5},
+        showscale:false,
+        hoverinfo:'skip'
+      }));
+
+      const layout = {
+        margin:{t:30,l:60,r:10,b:40},
+        paper_bgcolor:'rgba(0,0,0,0)',
+        plot_bgcolor:'rgba(0,0,0,0)',
+        font:{color:var_ink()},
+        xaxis:{title:'Fit-span (orbits)', dtick:1, range:[1,5]},
+        yaxis:{title:'# Satellites', rangemode:'tozero', range:[1,20]},
+        title: hdr
+      };
+
+      Plotly.react(elId, [heat, ...isoTraces], layout, {displaylogo:false, responsive:true});
+    }
+
+    function buildColorbarTicks(zmin, zmax){
+      // Build ticks at nice round numbers and ensure inclusion of 5,10,20 if they lie in range
+      const candidates = [0,2,5,10,15,20,30,40,50,60,80,100];
+      const ticks = candidates.filter(v => v>=Math.floor(zmin) && v<=Math.ceil(zmax));
+      if(!ticks.length){
+        const mid = (zmin+zmax)/2;
+        return [Math.round(zmin), Math.round(mid), Math.round(zmax)];
+      }
+      // Ensure uniqueness and sorted
+      return Array.from(new Set(ticks)).sort((a,b)=>a-b);
+    }
+    function var_ink(){ return getComputedStyle(document.documentElement).getPropertyValue('--ink') || '#eee'; }
+
     // Number of recent steps to show on lat/lon tracks
     const TAIL_STEPS = 10;
 
@@ -187,6 +464,9 @@
       }
       dash = await resp.json();
       status.textContent = 'Preparing…';
+      // Attempt to load MSIS LUT in parallel (used by RMS tab)
+      await loadMSISLUT();
+      if(MSIS_LUT){ status.textContent = 'Preparing… (MSIS LUT loaded)'; }
     } catch (err) {
       console.error('Failed to load dashboard_data.json', err);
       status.textContent = '⚠️ Could not load data. If you opened this file directly (file://), please serve docs/ over http(s) — e.g., `python -m http.server -d docs 8000` then visit http://localhost:8000/';
@@ -580,9 +860,73 @@
       updateScene(parseInt(slider.value,10));
     };
 
+    // --- RMS page wiring ---
+    function updateRMS(){
+      if(!MSIS_LUT){
+        const layoutMsg = {
+          annotations:[{text:'MSIS LUT missing — ensure docs/msis_lut.json is present and served over HTTP(S).', xref:'paper', yref:'paper', x:0.5, y:0.5, showarrow:false, font:{size:14, color:var_ink()}}],
+          paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)', margin:{t:40,l:40,r:40,b:40}
+        };
+        Plotly.react('rms_plot_A', [], layoutMsg, {displaylogo:false, responsive:true});
+        Plotly.react('rms_plot_B', [], layoutMsg, {displaylogo:false, responsive:true});
+        return;
+      }
+      try{
+        // Panel A
+        const tierA = $('rmsA_tier').value;
+        const amrA  = parseFloat($('rmsA_amr').value);
+        const altA  = parseFloat($('rmsA_alt').value);
+        const fA    = parseFloat($('rmsA_f107').value);
+        const apA   = parseFloat($('rmsA_ap').value);
+        // Panel B
+        const tierB = $('rmsB_tier').value;
+        const amrB  = parseFloat($('rmsB_amr').value);
+        const altB  = parseFloat($('rmsB_alt').value);
+        const fB    = parseFloat($('rmsB_f107').value);
+        const apB   = parseFloat($('rmsB_ap').value);
+
+        // Compute and update title with densities/drag
+        let rhoA, rhoB;
+        try{ rhoA = rho_kg_m3_from_f107_ap(altA, fA, apA); }catch(e){ rhoA = NaN; }
+        try{ rhoB = rho_kg_m3_from_f107_ap(altB, fB, apB); }catch(e){ rhoB = NaN; }
+        const vA = orbitalSpeed(altA), vB = orbitalSpeed(altB);
+        const dA = dragAccel(rhoA, amrA, vA);
+        const dB = dragAccel(rhoB, amrB, vB);
+        const titleEl = document.getElementById('rms_title');
+        if(titleEl){
+          titleEl.innerHTML = `RMS Error Explorer <span class="small" style="font-weight:400;opacity:0.85">· ρ<sub>A</sub>=${fmtSI(rhoA)} kg/m³, a<sub>D,A</sub>=${fmtSI(dA)} m/s² · ρ<sub>B</sub>=${fmtSI(rhoB)} kg/m³, a<sub>D,B</sub>=${fmtSI(dB)} m/s²</span>`;
+        }
+
+        const dataA = makeHeatData(tierA, amrA, altA, fA, apA);
+        const dataB = makeHeatData(tierB, amrB, altB, fB, apB);
+
+        // Shared color axis across both plots
+        const allZ = [...dataA.z.flat(), ...dataB.z.flat()];
+        const zmin = Math.min(...allZ);
+        const zmax = Math.max(...allZ);
+
+        renderHeatmap('rms_plot_A', `Tier=${tierA} · AMR=${amrA.toFixed(3)} m²/kg · Alt=${Math.round(altA)} km · F10.7=${Math.round(fA)} · Ap=${Math.round(apA)}`, dataA, zmin, zmax);
+        renderHeatmap('rms_plot_B', `Tier=${tierB} · AMR=${amrB.toFixed(3)} m²/kg · Alt=${Math.round(altB)} km · F10.7=${Math.round(fB)} · Ap=${Math.round(apB)}`, dataB, zmin, zmax);
+      }catch(err){
+        console.error(err);
+        const layoutMsg = {
+          annotations:[{text:'MSIS query failed: '+String(err.message||err), xref:'paper', yref:'paper', x:0.5, y:0.5, showarrow:false, font:{size:14, color:var_ink()}}],
+          paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)', margin:{t:40,l:40,r:40,b:40}
+        };
+        Plotly.react('rms_plot_A', [], layoutMsg, {displaylogo:false, responsive:true});
+        Plotly.react('rms_plot_B', [], layoutMsg, {displaylogo:false, responsive:true});
+      }
+    }
+
+    ['rmsA_tier','rmsA_amr','rmsA_alt','rmsA_f107','rmsA_ap',
+     'rmsB_tier','rmsB_amr','rmsB_alt','rmsB_f107','rmsB_ap'].forEach(id=>{
+      const el = $(id); if(el){ el.oninput = updateRMS; el.onchange = updateRMS; }
+    });
+
     // First paint
     status.textContent = `Ready · ${activeSatNames().length} sats`;
     updateScene(0);
+    updateRMS();
   })();
   </script>
 </body>
