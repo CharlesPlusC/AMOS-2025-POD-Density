@@ -1,1330 +1,589 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Satellite Density Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Plotly -->
   <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
   <style>
-    body { margin: 0; font-family: sans-serif; }
-    #container {
-      display: flex;
-      flex-direction: row;
-      height: 100vh;
-      width: 100vw;
-      min-width: 0;
-      min-height: 0;
+    :root{
+      --bg:#0f1115;
+      --panel:#161922;
+      --ink:#e7e9ee;
+      --muted:#a8b0bf;
+      --accent:#3aa0ff;
+      --accent-2:#9b6cff;
+      --chip:#1e2230;
+      --grid:#2a2f3d;
     }
-    #leftcol {
-      flex: 0 0 28vw;
-      min-width: 250px;
-      max-width: 40vw;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
+    *{box-sizing:border-box}
+    body{
+      margin:0; background:var(--bg); color:var(--ink);
+      font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
     }
-    #rightcol {
-      flex: 1 1 0;
-      min-width: 300px;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
+    header{
+      padding:12px 16px; border-bottom:1px solid var(--grid);
+      display:flex; gap:12px; align-items:center; justify-content:space-between;
     }
-    #globe, #latlonmap {
-      width: 100%;
-      height: 48vh;
-      min-height: 200px;
+    header .title{font-weight:600}
+    .wrap{
+      display:grid; grid-template-columns: 340px 1fr;
+      grid-template-rows: auto 1fr; height:calc(100vh - 58px);
     }
-    #timeseries {
-      width: 100%;
-      height: 100vh;
-      min-height: 300px;
+    aside{
+      grid-row:1 / span 2; grid-column:1;
+      border-right:1px solid var(--grid); background:var(--panel);
+      display:flex; flex-direction:column; padding:12px; gap:12px; overflow:auto;
     }
-    #controls {
-      position: absolute; 
-      bottom: 20px; 
-      right: 20px; 
-      width: calc(50% - 40px);
-      background: rgba(255,255,255,0.9); 
-      padding: 12px 16px; 
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      z-index: 1000;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
+    main{
+      grid-column:2; grid-row:2; overflow:auto; padding:12px;
+      display:grid; grid-template-rows: 0.8fr 1.2fr; gap:12px;
     }
-    .control-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
+    .card{
+      background:var(--panel); border:1px solid var(--grid);
+      border-radius:14px; padding:10px; box-shadow:0 0 0 1px rgba(255,255,255,0.02) inset;
     }
-    .control-row label {
-      font-weight: bold;
-      white-space: nowrap;
+    .card h3{margin:0 0 8px 0; font-size:14px; color:var(--muted); font-weight:600}
+    .row{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+    select, button, input[type="range"]{
+      background:var(--chip); color:var(--ink); border:1px solid var(--grid);
+      padding:8px 10px; border-radius:10px; outline:none;
     }
-    .control-row select {
-      flex: 1;
-      min-width: 120px;
+    select{min-width:160px}
+    button{cursor:pointer}
+    button.primary{background:var(--accent); color:#081019; border-color:transparent}
+    .small{font-size:12px; color:var(--muted)}
+    .stack{display:flex; flex-direction:column; gap:8px}
+    .plots{
+      display:grid; grid-template-columns: 1fr 1fr; gap:12px; height:100%;
     }
-    .plot-title {
-      text-align: center;
-      font-weight: bold;
-      font-size: 16px;
-      margin: 5px 0;
-      background: rgba(255,255,255,0.8);
-      padding: 5px;
-      border-radius: 4px;
-    }
-    #slider { width: 50vw; }
+    #globe,#map{height:100%}
+    #timeseries{height:100%}
+    .legend-note{color:var(--muted); font-size:12px; margin-top:-4px}
+    .spacer{flex:1}
+    .mono{font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+    a, a:visited{color:var(--accent)}
   </style>
 </head>
 <body>
-<div id="container">
-  <div id="leftcol">
-    <div class="plot-title">Inertial view</div>
-    <div id="globe"></div>
-    <div class="plot-title">Lat/Lon</div>
-    <div id="latlonmap"></div>
-  </div>
-  <div id="rightcol">
-    <div class="plot-title">EDR Density Time Series, Dst, Kp</div>
-    <div id="timeseries"></div>
-  </div>
-</div>
-<div id="controls">
-  <div class="control-row">
-    <input id="slider" type="range" min="0" max="1" step="1" value="0" style="flex: 2;">
-    <button id="play">▶️</button>
-    <button id="pause">⏸️</button>
-    <span id="time-label" style="font-weight: bold;"></span>
-  </div>
-  <div class="control-row">
-    <label for="density-model-select">Time-Series 1:</label>
-    <select id="density-model-select">
-      <option value="commercial">High Noise</option>
-      <option value="lowNoise">Low Noise</option>
-      <option value="mediumNoise">Medium Noise</option>
-      <option value="assimilated_commercial">Assimilated High Noise</option>
-      <option value="assimilated_lowNoise">Assimilated Low Noise</option>
-      <option value="assimilated_mediumNoise">Assimilated Medium Noise</option>
-    </select>
-    <label for="sat-count-select"># Sats:</label>
-    <select id="sat-count-select">
-      <option value="1">1</option>
-      <option value="2">2</option>
-      <option value="3">3</option>
-      <option value="6">6</option>
-      <option value="9">9</option>
-      <option value="18" selected>18</option>
-    </select>
-  </div>
-  <div class="control-row">
-    <label for="density-model-select-2">Time Series 2:</label>
-    <select id="density-model-select-2">
-      <option value="">None</option>
-      <option value="commercial">High Noise</option>
-      <option value="lowNoise">Low Noise</option>
-      <option value="mediumNoise">Medium Noise</option>
-      <option value="assimilated_commercial">Assimilated High Noise</option>
-      <option value="assimilated_lowNoise">Assimilated Low Noise</option>
-      <option value="assimilated_mediumNoise">Assimilated Medium Noise</option>
-    </select>
-  </div>
-</div>
-<script>
-(async function() {
-  // Load data
-  const dashData = await fetch('dashboard_data.json').then(r => r.json());
-  // load symmetric satellite combos
-  const combos = dashData.combos;
-  const validGroupSizes = dashData.valid_group_sizes;
-  // true-anomaly mapping from backend
-  const sat_anom = dashData.sat_anom;
+  <header>
+    <div class="title">Satellite Density Dashboard</div>
+    <div class="row small">
+      <span id="status" class="mono">Loading…</span>
+    </div>
+  </header>
 
-  // sanity check true-anomaly spacing for a given group size
-  function validateCombo(k) {
-    const group = combos[k];
-    if (!group) {
-      console.warn(`No combo for k=${k}`);
+  <div class="wrap">
+    <!-- Controls -->
+    <aside>
+      <div class="card stack">
+        <h3>Playback</h3>
+        <div class="row">
+          <button id="play" class="primary">▶︎ Play</button>
+          <button id="pause">⏸︎ Pause</button>
+          <div class="spacer"></div>
+          <label class="small">Speed</label>
+          <select id="speed">
+            <option>1x</option><option>2x</option><option>5x</option>
+            <option>10x</option><option>25x</option><option>50x</option>
+          </select>
+        </div>
+        <input id="slider" type="range" min="0" max="1" step="1" value="0"/>
+        <div class="row small">
+          <span>Time:</span><span id="tlabel" class="mono">—</span>
+        </div>
+      </div>
+
+      <div class="card stack">
+        <h3>Models & Satellites</h3>
+        <div class="row">
+          <label class="small">Time Series 1</label>
+          <select id="modelA"></select>
+        </div>
+        <div class="row">
+          <label class="small">Time Series 2</label>
+          <select id="modelB"></select>
+        </div>
+        <div class="row">
+          <label class="small"># Sats</label>
+          <select id="satCount">
+            <option>1</option><option>2</option><option>3</option>
+            <option>6</option><option>9</option><option selected>18</option>
+          </select>
+        </div>
+        <div class="legend-note">
+          Density lines use per-satellite colors; bold lines show means.
+        </div>
+      </div>
+
+      <div class="card stack">
+        <h3>Notes</h3>
+        <div class="small">
+          - Built for GitHub Pages (static).<br/>
+          - Uses <code class="mono">docs/dashboard_data.json</code>.<br/>
+          - No external textures; robust and lightweight.
+        </div>
+      </div>
+    </aside>
+
+    <!-- Plots -->
+    <main>
+      <div class="plots">
+        <div class="card"><h3>Inertial View</h3><div id="globe"></div></div>
+        <div class="card"><h3>Lat / Lon Tracks</h3><div id="map"></div></div>
+      </div>
+      <div class="card">
+        <h3>Density (top), Dst (middle), Kp (bottom)</h3>
+        <div id="timeseries"></div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+  (async function(){
+    /* ---------- Utilities ---------- */
+    const $ = (id)=>document.getElementById(id);
+    const status = $('status');
+
+    // Color helpers
+    const viridis = ['#440154','#482878','#3e4989','#31688e','#26828e','#1f9e89','#35b779','#6ece58','#b5de2b','#fde725'];
+    function colorRamp(n, i){
+      if(n<=1) return viridis[6];
+      const idx = Math.round(i*(viridis.length-1)/(n-1));
+      return viridis[Math.max(0,Math.min(viridis.length-1,idx))];
+    }
+
+    // log-scale Turbo-like simple ramp for markers (compact)
+    function turbo(v, vmin, vmax){
+      const t = Math.max(0, Math.min(1, (Math.log10(Math.max(v,1e-20)) - Math.log10(Math.max(vmin,1e-20))) /
+                                      (Math.log10(Math.max(vmax,1e-19)) - Math.log10(Math.max(vmin,1e-20)))));
+      const stops=[[34,136,234],[84,233,242],[120,255,104],[255,233,84],[255,140,54],[220,38,127]];
+      const k = Math.min(stops.length-2, Math.floor(t*(stops.length-1)));
+      const f = t*(stops.length-1)-k;
+      const c = stops[k].map((v,j)=>Math.round(v + f*(stops[k+1][j]-v)));
+      return `rgb(${c[0]},${c[1]},${c[2]})`;
+    }
+
+    // Unified palette for time series groups
+    const COLOR_A_BASE = 'rgba(80,160,255,0.35)';   // blue translucent for series A per-sat
+    const MEAN_A_COLOR = '#2b6cb0';                 // solid blue for series A mean
+    const COLOR_B_BASE = 'rgba(255,100,100,0.28)';  // red translucent for series B per-sat
+    const MEAN_B_COLOR = '#c53030';                 // solid red for series B mean
+    const HASDM_COLOR  = '#e6e6e6';                 // neutral for HASDM model
+
+    // Number of recent steps to show on lat/lon tracks
+    const TAIL_STEPS = 10;
+
+    /* ---------- Load data ---------- */
+    // Load data with friendly error if opened via file://
+    status.textContent = 'Loading data…';
+    const cacheBuster = `?v=${Date.now()}`; // avoid CDN/browser caching on updates
+    let dash;
+    try {
+      const resp = await fetch(`./dashboard_data.json${cacheBuster}`);
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
+      }
+      dash = await resp.json();
+      status.textContent = 'Preparing…';
+    } catch (err) {
+      console.error('Failed to load dashboard_data.json', err);
+      status.textContent = '⚠️ Could not load data. If you opened this file directly (file://), please serve docs/ over http(s) — e.g., `python -m http.server -d docs 8000` then visit http://localhost:8000/';
       return;
     }
-    const anoms = group.map(s => sat_anom[s]).sort((a,b) => a - b);
-    const spacing = 360.0 / k;
-    const diffs = anoms.map((a,i) => {
-      const next = (i < anoms.length - 1) ? anoms[i+1] : anoms[0] + 360;
-      return next - a;
+
+    // Expected structure:
+    // dash.combos: { "1": ["satA",...], "2": [...], ... }
+    // dash.densities_by_model: { modelKey: { times:[], model:[], SAT1:[], ... } }
+    // dash.trajectories: [{name, path:[[x,y,z],...], latlonalt:[[lat,lon,alt],...]}...]
+    // dash.kp: [{datetime, kp}], dash.dst: [{datetime, dst}]
+    const combos = dash.combos || {};
+    const models = dash.densities_by_model || { commercial: dash.densities };
+    const modelKeys = Object.keys(models);
+    const satsAll = (()=>{
+      const any = models[modelKeys[0]] || {};
+      return Object.keys(any).filter(k=>!['times','model','mean'].includes(k));
+    })();
+    const trajArr = dash.trajectories || [];
+    const kpArr = dash.kp || [];
+    const dstArr = dash.dst || [];
+
+    // Populate selectors
+    const modelA = $('modelA'), modelB = $('modelB');
+    modelKeys.forEach(k=>{
+      const label = k.replace(/_/g,' ').replace(/\b\w/g, s=>s.toUpperCase());
+      const o1 = document.createElement('option'); o1.value=k; o1.textContent=label; modelA.appendChild(o1);
+      const o2 = document.createElement('option'); o2.value=k; o2.textContent=label; modelB.appendChild(o2);
     });
-    console.log(`k=${k} selected sats:`, group);
-    console.log(`Anomaly values:`, anoms);
-    console.log(`Anomaly diffs:`, diffs.map(d => d.toFixed(6)), `target=${spacing.toFixed(6)}`);
-    const ok = diffs.every(d => Math.abs(d - spacing) < 1e-6);
-    if (!ok) {
-      console.error(`Anomaly spacing INVALID for k=${k}`);
-    } else {
-      console.log(`Anomaly spacing OK for k=${k}`);
-    }
-  }
-  // --- DENSITY MODEL SWITCHING ---
-  const densitiesByModel = dashData.densities_by_model || { commercial: dashData.densities };
-  // helper to scale assimilated densities by 1/2.2
-  function getDens(modelKey) {
-    const raw = densitiesByModel[modelKey];
-    if (modelKey.startsWith('assimilated')) {
-      const scaled = { times: raw.times, model: raw.model };
-      Object.keys(raw).forEach(k => {
-        if (!['times','model','mean'].includes(k)) {
-          scaled[k] = raw[k].map(v => v / 2.2);
-        }
-      });
-      return scaled;
-    } else {
+    // Default A: first key; Default B: none (empty option)
+    const noneOpt = document.createElement('option'); noneOpt.value=''; noneOpt.textContent='None';
+    modelB.insertBefore(noneOpt, modelB.firstChild);
+    modelA.value = modelKeys.includes('commercial') ? 'commercial' : modelKeys[0];
+    modelB.value = '';
+
+    const satCountSel = $('satCount');
+    let satCount = parseInt(satCountSel.value,10);
+
+    // Time axis
+    function parseTimes(arr){ return arr.map(t=>new Date(t)); }
+    function getModel(key){
+      if(!key) return null;
+      const raw = models[key];
+      if(!raw) return null;
+      // For assimilated variants, multiply satellite series by 2.2 (missing scale factor)
+      if(/^assimilated/i.test(key)){
+        const out = { times: raw.times, model: raw.model };
+        Object.keys(raw).forEach(k=>{
+          if(!['times','model','mean'].includes(k)){
+            // scale per-satellite series only
+            out[k] = (raw[k] || []).map(v => v / 2.2);
+          }
+        });
+        return out;
+      }
+      // Non-assimilated: return as-is
       return raw;
     }
-  }
-  let currentModel = 'commercial';
-  let dens = getDens(currentModel);
-  const secondarySelect = document.getElementById('density-model-select-2');
-  let secondaryModel = '';
-  let dens2 = null;
-  secondarySelect.onchange = function() {
-    secondaryModel = secondarySelect.value;
-    dens2 = secondaryModel ? getDens(secondaryModel) : null;
-    
-    // Recreate the entire time series plot with both models
-    const [minTime, maxTime] = getDataTimeRange();
-    const updatedLayout = {
-      grid: { rows: 3, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
-      xaxis: { 
-        title: 'Time', 
-        tickformat: '%Y-%m-%d\n%H:%M', 
-        type: 'date', 
-        anchor: 'y3', 
-        domain: [0,1],
-        range: [minTime, maxTime]
-      },
-      yaxis:  { title: 'Density (kg/m³)', tickformat: '.2e', domain: [0.5, 1] },
-      yaxis2: { title: 'Dst (nT)', anchor: 'x', domain: [0.25, 0.5] },
-      yaxis3: { title: 'Kp Index', dtick: 1, anchor: 'x', domain: [0, 0.25] },
-      legend: { orientation: 'h', y: -0.2 },
-      margin: { t: 40, r: 20, l: 60, b: 60 },
-      hovermode: 'x unified',
-      showlegend: true
-    };
-    const newAllTraces = [
-      ...makeDensityTraces(),
-      makeDensityModelTrace(),
-      makeMeanTrace(dens, 'Mean (1)', 'orange'),
-      ...(dens2 ? [ makeMeanTrace(dens2, 'Mean (2)', 'purple') ] : []),
-      dstTrace,
-      kpTrace
-    ];
-    try {
-      Plotly.newPlot('timeseries', newAllTraces, updatedLayout);
-      Plotly.Plots.resize('timeseries');
-      window.dispatchEvent(new Event('resize'));
-    } catch (e) {
-      console.error('Plotly.newPlot error:', e);
+
+    /* ---------- Shared time base ---------- */
+    let modelAData = getModel(modelA.value);
+    const timesAll = parseTimes(modelAData.times);
+    const tMin = timesAll[0], tMax = timesAll[timesAll.length-1];
+
+    // Slider time base derived from trajectories length if present, otherwise density times
+    const nSteps = (trajArr[0] && trajArr[0].path) ? trajArr[0].path.length : timesAll.length;
+    const trajStart = timesAll[0] || new Date();
+    const trajTimes = Array.from({length:nSteps},(_,i)=> new Date(trajStart.getTime()+i*60*1000)); // 60s step fallback
+
+    // Map helper
+    const satIndex = Object.fromEntries(trajArr.map((s,i)=>[s.name, i]));
+
+    // Active satellites by count using combos
+    function activeSatNames(){
+      const c = combos[String(satCount)] || combos[satCount] || [];
+      return c.filter(n=>satsAll.includes(n));
     }
-  };
-  const trajArr = dashData.trajectories;
-  // map satellite name to its index in trajArr
-  const satIndexMap = {};
-  trajArr.forEach((satObj, idx) => {
-    satIndexMap[satObj.name] = idx;
-  });
-  const kpArr = dashData.kp;
-  const dstArr = dashData.dst;
 
-  // Defensive checks for data validity
-  if (!trajArr || !trajArr.length) {
-    console.error("trajArr is missing or empty!");
-  }
-  if (!trajArr[0].latlonalt || !trajArr[0].latlonalt.length) {
-    console.error("latlonalt is missing or empty for the first satellite!");
-  }
-  if (!dens || !dens.times || !dens.model) {
-    console.error("Density data is missing or malformed!", dens);
-  }
-
-  // --- DENSITY, KP, DST DATA PREP ---
-  const times = dens.times.map(t => new Date(t));
-  const timeLabels = dens.times;
-  const t0 = times[0];
-  const satNames = Object.keys(dens).filter(k => !['model','mean','times'].includes(k));
-  const viridis = [
-    '#440154', '#482878', '#3e4989', '#31688e', '#26828e', '#1f9e89',
-    '#35b779', '#6ece58', '#b5de2b', '#fde725'
-  ];
-  let nSats = trajArr.length;
-  let satCount = 18; // Start with 18 satellites (which should be available in combos)
-  
-  // --- Update satNames, satColors, and all plots based on satCount ---
-  function getActiveSatNames() {
-    const result = combos[satCount] || [];
-    return result;
-  }
-  function getActiveSatColors() {
-    const names = getActiveSatNames();
-    const allSatNames = Object.keys(dens).filter(k => !['model','mean','times'].includes(k));
-    const colorMap = {};
-    allSatNames.forEach((sat, i) => { 
-      const t = i/(allSatNames.length-1);
-      const idx = Math.round(t*(viridis.length-1));
-      colorMap[sat] = viridis[idx];
-    });
-    return names.map(sat => colorMap[sat]);
-  }
-  
-  // initial validation for default satellite count
-  validateCombo(satCount);
-  const satColors = satNames.map((_,i) => {
-    const t = i/(nSats-1);
-    const idx = Math.round(t*(viridis.length-1));
-    return viridis[idx];
-  });
-  // Only use index data from April 21st onward
-  const dataStartTime = new Date('2023-04-21T00:00:00');
-  const kp_times_all = kpArr.map(d => new Date(d.datetime));
-  const kp_vals_all = kpArr.map(d => d.kp);
-  const dst_times_all = dstArr.map(d => new Date(d.datetime));
-  const dst_vals_all = dstArr.map(d => d.dst);
-  const kp_idx0 = kp_times_all.findIndex(t => t >= dataStartTime);
-  const dst_idx0 = dst_times_all.findIndex(t => t >= dataStartTime);
-  const kp_times   = kp_idx0   === -1 ? [] : kp_times_all.slice(kp_idx0);
-  const kp_vals    = kp_idx0   === -1 ? [] : kp_vals_all.slice(kp_idx0);
-  const dst_times  = dst_idx0  === -1 ? [] : dst_times_all.slice(dst_idx0);
-  const dst_vals   = dst_idx0  === -1 ? [] : dst_vals_all.slice(dst_idx0);
-
-  // --- PLOTLY SUBPLOTS FOR ALL TIME SERIES ---
-  // Order: Density, Dst, Kp
-  function makeDensityTraces() {
-    const names = getActiveSatNames();
-    const traces = [];
-    // primary model (blue)
-    names.forEach(sat => {
-      if (dens[sat]) {
-        traces.push({
-          x: times, y: dens[sat],
-          mode: 'lines',
-          name: sat,
-          line: { color: 'rgba(109,193,255,0.4)', width: 2 },
-          legendgroup: sat,
-          hovertemplate: `${sat}: %{y:.2e}<extra></extra>`,
-          xaxis: 'x', yaxis: 'y1'
-        });
-      } else {
-        console.warn('No density data for satellite:', sat);
+    // Mean helper
+    function sliceToIdx(arr, idx){ return arr.slice(0, Math.max(1, idx+1)); }
+    function meanSeries(dobj, names){
+      const n = names.length, L = dobj.times.length;
+      const out = new Array(L);
+      for(let t=0;t<L;t++){
+        let s = 0;
+        for(const nm of names){ s += (dobj[nm]?.[t] ?? 0); }
+        out[t] = s / Math.max(1,n);
       }
-    });
-    // secondary model (green), if selected
-    if (dens2) {
-      names.forEach(sat => {
-        if (dens2[sat]) {
+      return out;
+    }
+
+    // Index series to current time
+    const kpTimes = kpArr.map(d=>new Date(d.datetime));
+    const kpVals  = kpArr.map(d=>d.kp);
+    const dstTimes= dstArr.map(d=>new Date(d.datetime));
+    const dstVals = dstArr.map(d=>d.dst);
+
+    /* ---------- Build plots ---------- */
+
+    // 1) Inertial view (clean sphere + markers)
+    (function initGlobe(){
+      const R = 6378137; // meters
+      const phi = [], th = [];
+      for(let i=0;i<40;i++) phi.push(i*Math.PI/39);
+      for(let j=0;j<80;j++) th.push(j*2*Math.PI/79);
+      const xs = phi.map(p=>th.map(t=>R*Math.cos(t)*Math.sin(p)));
+      const ys = phi.map(p=>th.map(t=>R*Math.sin(t)*Math.sin(p)));
+      const zs = phi.map(p=>th.map(t=>R*Math.cos(p)));
+
+      const earth = {
+        type:'surface', x:xs, y:ys, z:zs, showscale:false, opacity:0.12,
+        colorscale:[[0,'#6ab7ff'],[1,'#6ab7ff']], hoverinfo:'skip'
+      };
+
+      // Satellite marker traces (one per active sat). Start with placeholders; update via restyle.
+      const names = activeSatNames();
+      const markers = names.map((nm,i)=>({
+        type:'scatter3d', mode:'markers',
+        x:[0], y:[0], z:[0],
+        marker:{size:5, color:viridis[i%viridis.length]},
+        name:nm, showlegend:false, hoverinfo:'skip'
+      }));
+
+      const layout = {
+        scene:{
+          xaxis:{visible:false}, yaxis:{visible:false}, zaxis:{visible:false},
+          aspectmode:'data', bgcolor:'rgba(0,0,0,0)'
+        },
+        margin:{t:0,l:0,r:0,b:0},
+        paper_bgcolor:'rgba(0,0,0,0)',
+        plot_bgcolor:'rgba(0,0,0,0)'
+      };
+      Plotly.newPlot('globe', [earth, ...markers], layout, {displaylogo:false, responsive:true});
+    })();
+
+    // 2) Lat/Lon map (tracks + current markers)
+    function makeMapTraces(step){
+      const names = activeSatNames();
+      const traces = [];
+      names.forEach((nm,i)=>{
+        const idx = satIndex[nm];
+        if(idx===undefined) return;
+        const lla = trajArr[idx].latlonalt || [];
+        const lon = lla.map(p=>p[1]);
+        const lat = lla.map(p=>p[0]);
+
+        // Track (line): only show last TAIL_STEPS
+        const startIdx = Math.max(0, step - (TAIL_STEPS - 1));
+        traces.push({
+          type:'scattergeo', mode:'lines',
+          lon: lon.slice(startIdx, step + 1),
+          lat: lat.slice(startIdx, step + 1),
+          line:{width:1, color: colorRamp(names.length, i)},
+          name: nm, showlegend:false, hoverinfo:'skip'
+        });
+        // Current marker
+        if(lla[step]){
           traces.push({
-            x: times, y: dens2[sat],
-            mode: 'lines',
-            name: sat + ' (cmp)',
-            line: { color: 'rgba(0,200,100,0.4)', width: 2 },
-            legendgroup: sat + '_cmp',
-            hovertemplate: `${sat} cmp: %{y:.2e}<extra></extra>`,
-            xaxis: 'x', yaxis: 'y1'
+            type:'scattergeo', mode:'markers',
+            lon:[lla[step][1]], lat:[lla[step][0]],
+            marker:{size:6, color: colorRamp(names.length, i)},
+            name: nm, showlegend:false, hovertemplate: `${nm}<extra></extra>`
           });
         }
       });
+      return traces;
     }
-    return traces;
-  }
-  function makeDensityModelTrace() {
-    return {
-      x: times, y: dens.model,
-      mode: 'lines', name: 'HASDM',
-      line: { color: 'black', width: 2 },
-      legendgroup: 'model',
-      hovertemplate: 'Model: %{y:.2e}<extra></extra>',
-      xaxis: 'x', yaxis: 'y1',
-    };
-  }
-  function computeMean(dobj) {
-    const names = getActiveSatNames();
-    const n = names.length;
-    const mean = [];
-    for (let t = 0; t < dobj.times.length; ++t) {
-      let sum = 0;
-      names.forEach(sat => sum += dobj[sat][t]);
-      mean.push(sum / n);
-    }
-    return mean;
-  }
-  function makeMeanTrace(dobj, label, color) {
-    return {
-      x: dobj.times.map(t => new Date(t)),
-      y: computeMean(dobj),
-      mode: 'lines',
-      name: label,
-      line: { color: color, width: 2 },
-      legendgroup: label,
-      hovertemplate: `${label}: %{y:.2e}<extra></extra>`,
-      xaxis: 'x', yaxis: 'y1'
-    };
-  }
-  const dstTrace = {
-    x: dst_times, y: dst_vals,
-    mode: 'lines+markers', name: 'Dst',
-    line: { color: '#2ca02c', width: 2 },
-    marker: { size: 4 },
-    hovertemplate: 'Dst: %{y}<extra></extra>',
-    xaxis: 'x', yaxis: 'y2',
-  };
-  const kpTrace = {
-    x: kp_times, y: kp_vals,
-    mode: 'lines+markers', name: 'Kp',
-    line: { color: '#ff7f0e', width: 2, shape: 'hv' },
-    marker: { size: 4 },
-    hovertemplate: 'Kp: %{y}<extra></extra>',
-    xaxis: 'x', yaxis: 'y3',
-  };
-  const allTraces = [
-    ...makeDensityTraces(),
-    makeDensityModelTrace(),
-    makeMeanTrace(dens, 'Mean (1)', 'orange'),
-    ...(dens2 ? [ makeMeanTrace(dens2, 'Mean (2)', 'purple') ] : []),
-    dstTrace,
-    kpTrace
-  ];
-  // Function to get the fixed time range for axes
-  function getDataTimeRange() {
-    // Fixed range: April 21-28, 2023
-    return ['2023-04-21T00:00:00', '2023-04-28T23:59:59'];
-  }
-
-  // Densities plot: top half, Dst/Kp in bottom half (no F10.7)
-  const [minTime, maxTime] = getDataTimeRange();
-  const layout = {
-    grid: { rows: 3, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
-    xaxis: { 
-      title: 'Time', 
-      tickformat: '%Y-%m-%d\n%H:%M', 
-      type: 'date', 
-      anchor: 'y3', 
-      domain: [0,1],
-      range: [minTime, maxTime]
-    },
-    yaxis:  { title: 'Density (kg/m³)', tickformat: '.2e', domain: [0.5, 1] },
-    yaxis2: { title: 'Dst (nT)', anchor: 'x', domain: [0.25, 0.5] },
-    yaxis3: { title: 'Kp Index', dtick: 1, anchor: 'x', domain: [0, 0.25] },
-    legend: { orientation: 'h', y: -0.2 },
-    margin: { t: 40, r: 20, l: 60, b: 60 },
-    hovermode: 'x unified',
-    showlegend: true
-  };
-  try {
-    Plotly.newPlot('timeseries', allTraces, layout);
-    Plotly.Plots.resize('timeseries');
-    window.dispatchEvent(new Event('resize'));
-  } catch (e) {
-    console.error('Plotly.newPlot error:', e);
-  }
-
-  // --- GLOBE PLOT SETUP ---
-  // Build Earth sphere with proper texture mapping
-  const R = 6378137;
-  // Increase resolution for better texture mapping
-  const u = Array.from({length:180},(_,i)=>2*Math.PI*i/179); // longitude (0 to 2π)
-  const v = Array.from({length:90},(_,j)=>Math.PI*j/89);     // latitude (0 to π)
-  
-  // Create sphere coordinates
-  const xs0 = v.map(phi=>u.map(theta=>R*Math.cos(theta)*Math.sin(phi)));
-  const ys0 = v.map(phi=>u.map(theta=>R*Math.sin(theta)*Math.sin(phi)));
-  const zs0 = v.map(phi=>u.map(theta=>R*Math.cos(phi)));
-
-  // Create a canvas to load and process the Earth texture
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  
-  // Create image element to load the texture
-  const earthImg = new Image();
-  earthImg.crossOrigin = 'anonymous';
-  
-  // Function to create globe with texture
-  function createTexturedGlobe(currentTime = null) {
-    // Calculate Earth rotation for current time
-    let gmstAngle = 0;
-    if (currentTime) {
-      const year = currentTime.getUTCFullYear();
-      const month = currentTime.getUTCMonth() + 1;
-      const day = currentTime.getUTCDate();
-      const hour = currentTime.getUTCHours() + currentTime.getUTCMinutes() / 60 + currentTime.getUTCSeconds() / 3600;
-      gmstAngle = calcGMST0(year, month, day, hour, omega);
-    }
-
-    // Create texture coordinates with Earth rotation
-    const textureU = v.map((phi, i) => u.map((theta, j) => {
-      // Apply Earth rotation offset
-      let adjustedTheta = theta + gmstAngle;
-      adjustedTheta = adjustedTheta % (2 * Math.PI);
-      if (adjustedTheta < 0) adjustedTheta += 2 * Math.PI;
-      
-      // Map to texture coordinates (0 to 1)
-      return adjustedTheta / (2 * Math.PI);
-    }));
-
-    const textureV = v.map((phi, i) => u.map((theta, j) => {
-      // Map latitude to texture V coordinate (0 to 1)
-      return phi / Math.PI;
-    }));
-
-    const globeTrace = {
-      type: 'surface',
-      x: xs0,
-      y: ys0,
-      z: zs0,
-      // Use the actual image as texture
-      surfacecolor: `data:image/jpeg;base64,${getImageBase64()}`,
-      cauto: false,
-      showscale: false,
-      opacity: 1.0,
-      hoverinfo: 'skip',
-      lighting: {
-        ambient: 0.9,
-        diffuse: 0.7,
-        specular: 0.1,
-        roughness: 0.9,
-        fresnel: 0.1
-      }
-    };
-
-    return globeTrace;
-  }
-
-  // Function to convert image to base64
-  function getImageBase64() {
-    const tempCanvas = document.createElement('canvas');
-    const tempCtx = tempCanvas.getContext('2d');
-    tempCanvas.width = earthImg.width;
-    tempCanvas.height = earthImg.height;
-    tempCtx.drawImage(earthImg, 0, 0);
-    return tempCanvas.toDataURL('image/jpeg').split(',')[1];
-  }
-
-  // Function to create globe with texture
-  function createSimpleTexturedGlobe(currentTime = null) {
-    // No Earth rotation needed here since we're transforming the satellites instead
-    // The texture stays fixed in Earth-fixed coordinates
-
-    // Sample the image for surface colors
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const pixels = imageData.data;
-    
-    const surfaceColors = v.map((phi, i) => u.map((theta, j) => {
-      // Convert spherical coordinates to lat/lon (Earth-fixed)
-      const lat = 90 - (phi * 180 / Math.PI); // Convert to latitude (-90 to 90)
-      const lon = (theta * 180 / Math.PI) - 180; // Convert to longitude (-180 to 180)
-      
-      // Map to texture coordinates (no rotation - texture is Earth-fixed)
-      const texX = Math.floor(((lon + 180) / 360) * canvas.width) % canvas.width;
-      const texY = Math.floor(((90 - lat) / 180) * canvas.height);
-      
-      // Ensure we stay within bounds
-      const safeX = Math.max(0, Math.min(canvas.width - 1, texX));
-      const safeY = Math.max(0, Math.min(canvas.height - 1, texY));
-      
-      const pixelIndex = (safeY * canvas.width + safeX) * 4;
-      
-      // Get RGB values and determine if it's land or ocean
-      const r = pixels[pixelIndex] / 255;
-      const g = pixels[pixelIndex + 1] / 255;
-      const b = pixels[pixelIndex + 2] / 255;
-      
-      // Use a combination approach: brightness for terrain + color info
-      const brightness = (r + g + b) / 3;
-      
-      // Detect water (typically blue dominant)
-      const isWater = (b > r && b > g && brightness < 0.6);
-      
-      if (isWater) {
-        return 0.1 + brightness * 0.3; // Ocean range: 0.1 to 0.4
-      } else {
-        return 0.5 + brightness * 0.5; // Land range: 0.5 to 1.0
-      }
-    }));
-
-    const globeTrace = {
-      type: 'surface',
-      x: xs0,
-      y: ys0,
-      z: zs0,
-      surfacecolor: surfaceColors,
-      cmin: 0,
-      cmax: 1,
-      colorscale: [
-        [0.0, 'rgb(8, 48, 107)'],     // Deep ocean
-        [0.1, 'rgb(33, 113, 181)'],   // Ocean
-        [0.2, 'rgb(66, 146, 198)'],   // Shallow water
-        [0.3, 'rgb(107, 174, 214)'],  // Coast
-        [0.4, 'rgb(158, 202, 225)'],  // Light water
-        [0.5, 'rgb(152, 208, 144)'],  // Coastal land
-        [0.6, 'rgb(196, 219, 151)'],  // Low land
-        [0.7, 'rgb(254, 224, 139)'],  // Plains
-        [0.8, 'rgb(217, 179, 140)'],  // Hills
-        [0.85, 'rgb(139, 119, 78)'],  // Mountains
-        [0.9, 'rgb(101, 67, 33)'],    // High mountains
-        [1.0, 'rgb(255, 255, 255)']   // Snow/ice
-      ],
-      showscale: false,
-      opacity: 1.0,
-      hoverinfo: 'skip',
-      lighting: {
-        ambient: 0.9,
-        diffuse: 0.7,
-        specular: 0.1,
-        roughness: 0.9,
-        fresnel: 0.1
-      }
-    };
-
-    return globeTrace;
-  }
-
-  // Load the Earth texture image
-  earthImg.onload = function() {
-    console.log('Earth texture loaded successfully:', earthImg.width, 'x', earthImg.height);
-    
-    // Set canvas size to match image
-    canvas.width = earthImg.width;
-    canvas.height = earthImg.height;
-    
-    // Draw image to canvas for pixel access
-    ctx.drawImage(earthImg, 0, 0);
-    
-    // Test pixel sampling
-    const testPixel = ctx.getImageData(canvas.width/2, canvas.height/2, 1, 1).data;
-    console.log('Center pixel RGB:', testPixel[0], testPixel[1], testPixel[2]);
-    
-    // Create the initial textured globe
-    const initialGlobe = createSimpleTexturedGlobe();
-    Plotly.newPlot('globe', [initialGlobe, ...makeOrbitPoints(0)], globeLayout);
-  };
-
-  // Fallback if image fails to load - create simple blue/green globe
-  earthImg.onerror = function() {
-    console.warn('Could not load earth_texture.jpg, using fallback colors');
-    console.log('Image src:', earthImg.src);
-    console.log('Current location:', window.location.href);
-    
-    const fallbackSurface = v.map((phi, i) => u.map((theta, j) => {
-      // Simple land/ocean approximation
-      const lat = 90 - (phi * 180 / Math.PI);
-      const lon = (theta * 180 / Math.PI) - 180;
-      
-      // Very basic continents
-      let isLand = false;
-      if (lat > 25 && lat < 70 && lon > -160 && lon < -50) isLand = true; // N America
-      if (lat > -55 && lat < 15 && lon > -80 && lon < -35) isLand = true; // S America
-      if (lat > 35 && lat < 70 && lon > -10 && lon < 40) isLand = true;   // Europe
-      if (lat > -35 && lat < 35 && lon > -20 && lon < 50) isLand = true;  // Africa
-      if (lat > 5 && lat < 75 && lon > 40 && lon < 180) isLand = true;    // Asia
-      if (lat > -45 && lat < -10 && lon > 110 && lon < 160) isLand = true; // Australia
-      
-      return isLand ? 0.7 : 0.2;
-    }));
-
-    const globeTrace = {
-      type: 'surface',
-      x: xs0,
-      y: ys0,
-      z: zs0,
-      surfacecolor: fallbackSurface,
-      cmin: 0,
-      cmax: 1,
-      colorscale: [
-        [0, 'rgb(65, 105, 225)'],    // Ocean blue
-        [0.5, 'rgb(100, 149, 237)'], // Light ocean
-        [0.6, 'rgb(144, 238, 144)'], // Light green
-        [1, 'rgb(34, 139, 34)']      // Forest green
-      ],
-      showscale: false,
-      opacity: 1.0,
-      hoverinfo: 'skip'
-    };
-    
-    // Create initial globe with fallback
-    Plotly.newPlot('globe', [globeTrace, ...makeOrbitPoints(0)], globeLayout);
-  };
-
-  // Try to load the texture
-  earthImg.src = 'earth_texture.jpg';
-
-  // Use updated density range for color mapping
-  const densMin = 0.7e-13;
-  const densMax = 8e-13;
-
-  // Turbo colormap stops (from Google, 0-1)
-  function interpolateTurbo(t) {
-    // 6 stops: blue, cyan, green, yellow, orange, red
-    const stops = [
-      [34, 136, 234],   // blue
-      [84, 233, 242],   // cyan
-      [120, 255, 104],  // green
-      [255, 233, 84],   // yellow
-      [255, 140, 54],   // orange
-      [220, 38, 127]    // red
-    ];
-    t = Math.max(0, Math.min(1, t));
-    const n = stops.length-1;
-    const idx = Math.floor(t*n);
-    const frac = t*n - idx;
-    const c0 = stops[idx], c1 = stops[Math.min(idx+1, n)];
-    const r = Math.round(c0[0] + frac*(c1[0]-c0[0]));
-    const g = Math.round(c0[1] + frac*(c1[1]-c0[1]));
-    const b = Math.round(c0[2] + frac*(c1[2]-c0[2]));
-    return `rgb(${r},${g},${b})`;
-  }
-  function getTurboColor(val, vmin, vmax) {
-    // Logarithmic scaling
-    const safeVal = Math.max(val, 1e-20);
-    const safeMin = Math.max(vmin, 1e-20);
-    const safeMax = Math.max(vmax, safeMin*1.01);
-    const t = (Math.log10(safeVal) - Math.log10(safeMin)) / (Math.log10(safeMax) - Math.log10(safeMin));
-    return interpolateTurbo(t);
-  }
-  // --- COORDINATE TRANSFORMATION FUNCTIONS ---
-  // Function to transform ECI coordinates to ECEF coordinates
-  function eciToEcef(eciPos, gmstAngle) {
-    const [x_eci, y_eci, z_eci] = eciPos;
-    
-    // Add 180 degree offset to test orientation
-    const adjustedGMST = gmstAngle + Math.PI;
-    
-    // Rotation matrix for GMST rotation about Z-axis
-    // For ECI to ECEF: rotate by +GMST (Earth rotates, so we rotate coordinates in same direction)
-    const cosGMST = Math.cos(adjustedGMST);
-    const sinGMST = Math.sin(adjustedGMST);
-    
-    // Apply rotation: ECEF = R_z(+GMST) * ECI
-    const x_ecef = cosGMST * x_eci + sinGMST * y_eci;
-    const y_ecef = -sinGMST * x_eci + cosGMST * y_eci;
-    const z_ecef = z_eci; // Z component unchanged
-    
-    return [x_ecef, y_ecef, z_ecef];
-  }
-
-  // Function to convert ECEF to lat/lon for verification
-  function ecefToLatLon(ecefPos) {
-    const [x, y, z] = ecefPos;
-    const R = Math.sqrt(x*x + y*y + z*z);
-    const lat = Math.asin(z / R) * 180 / Math.PI;
-    const lon = Math.atan2(y, x) * 180 / Math.PI;
-    return [lat, lon];
-  }
-
-  // Test function for different rotations
-  function testEciToEcef(eciPos, gmstAngle, offset = 0) {
-    const [x_eci, y_eci, z_eci] = eciPos;
-    const adjustedGMST = gmstAngle + offset;
-    const cosGMST = Math.cos(adjustedGMST);
-    const sinGMST = Math.sin(adjustedGMST);
-    const x_ecef = cosGMST * x_eci + sinGMST * y_eci;
-    const y_ecef = -sinGMST * x_eci + cosGMST * y_eci;
-    const z_ecef = z_eci;
-    return [x_ecef, y_ecef, z_ecef];
-  }
-
-  // Only show moving satellite points, not orbit lines
-  const nSteps = trajArr[0].path.length;
-  function makeOrbitPoints(iStep) {
-    const names = getActiveSatNames();
-    const currentTime = trajTimes[iStep];
-    
-    // Calculate GMST for coordinate transformation
-    const year = currentTime.getUTCFullYear();
-    const month = currentTime.getUTCMonth() + 1;
-    const day = currentTime.getUTCDate();
-    const hour = currentTime.getUTCHours() + currentTime.getUTCMinutes() / 60 + currentTime.getUTCSeconds() / 3600;
-    const gmstAngle = calcGMST0(year, month, day, hour, omega);
-    
-    return names.map(sat => {
-      const idx = satIndexMap[sat];
-      const eciPos = trajArr[idx].path[iStep];
-      
-      // Transform ECI to ECEF coordinates for proper alignment with Earth
-      const ecefPos = eciToEcef(eciPos, gmstAngle);
-      
-      return {
-        type: 'scatter3d', mode: 'markers',
-        x: [ecefPos[0]],
-        y: [ecefPos[1]],
-        z: [ecefPos[2]],
-        marker: { size: 6, color: getTurboColor(dens[sat][iStep], densMin, densMax) },
-        name: sat,
-        legendgroup: sat,
-        showlegend: true,
-        hoverinfo: 'skip'
-      };
-    });
-  }
-  // globe layout saved for re-render on satCount change
-  const globeLayout = {
-    scene: {
-      xaxis: { visible: false },
-      yaxis: { visible: false },
-      zaxis: { visible: false },
-      aspectmode: 'data',
-    },
-    margin: { t: 0, r: 0, l: 0, b: 0 },
-    showlegend: false,
-  };
-  // Globe will be initialized after texture loads
-
-  // --- LAT/LON MAP SETUP ---
-  // Initial positions for map
-  function makeLatlonTraces(iStep) {
-    const names = getActiveSatNames();
-    const colors = getActiveSatColors();
-    return names.map((sat, i) => {
-      const idx = satIndexMap[sat];
-      return {
-        type: 'scattergeo',
-        mode: 'markers',
-        lon: [trajArr[idx].latlonalt[iStep][1]],
-        lat: [trajArr[idx].latlonalt[iStep][0]],
-        marker: { size: 8, color: colors[i] },
-        name: sat,
-        legendgroup: sat,
-        showlegend: true,
-        hoverinfo: 'text',
-        text: [`${sat}<br>Lat: ${trajArr[idx].latlonalt[iStep][0].toFixed(2)}<br>Lon: ${trajArr[idx].latlonalt[iStep][1].toFixed(2)}<br>Alt: ${trajArr[idx].latlonalt[iStep][2].toFixed(2)} km`]
-      };
-    });
-  }
-  // lat/lon map layout saved for re-render on satCount change
-  const latlonLayout = {
-    geo: {
-      projection: { type: 'natural earth' },
-      showland: true,
-      landcolor: '#eaeaea',
-      showcountries: true,
-      countrycolor: '#888',
-      showocean: true,
-      oceancolor: '#b3d1ff',
-      lataxis: { range: [-90, 90] },
-      lonaxis: { range: [-180, 180] }
-    },
-    margin: { t: 20, r: 0, l: 0, b: 0 },
-    showlegend: false
-  };
-  Plotly.newPlot('latlonmap', makeLatlonTraces(0), latlonLayout);
-
-  // --- Animation speed control ---
-  const controlsDiv = document.getElementById('controls');
-  const speedLabel = document.createElement('label');
-  speedLabel.textContent = 'Speed:';
-  speedLabel.style.marginLeft = '1em';
-  const speedSelect = document.createElement('select');
-  [1, 2, 3, 4, 5, 10, 100, 1000].forEach(val => {
-    const opt = document.createElement('option');
-    opt.value = val;
-    opt.textContent = val + 'x';
-    if (val === 1) opt.selected = true;
-    speedSelect.appendChild(opt);
-  });
-  speedLabel.appendChild(speedSelect);
-  controlsDiv.appendChild(speedLabel);
-  let speed = 1;
-  speedSelect.onchange = () => { speed = parseFloat(speedSelect.value); };
-
-  // --- SLIDER & ANIMATION ---
-  const slider = document.getElementById('slider');
-  const play   = document.getElementById('play');
-  const pause  = document.getElementById('pause');
-  const label  = document.getElementById('time-label');
-  slider.min = 0;
-  slider.max = nSteps-1;
-  slider.step = 1;
-  slider.value = 0;
-  let anim = null;
-
-  // Add a dynamic time label above the slider
-  label.style.display = 'block';
-  label.style.fontWeight = 'bold';
-  label.style.fontSize = '1.1em';
-  label.style.marginBottom = '8px';
-
-  // --- DYNAMIC DENSITY PLOT ---
-  // --- Fix: Only add a new point to the density plot when the globe time passes a density time ---
-  // Precompute trajectory times (60s steps starting from April 21, 2023 00:00:00)
-  const trajStart = new Date('2023-04-21T00:00:00');
-  const trajTimes = Array.from({length: nSteps}, (_,i) => new Date(trajStart.getTime() + i*60*1000));
-  // Density times are already in 'times' (as Date objects)
-
-  // --- GMST calculation for initial globe orientation ---
-  function calcJulianDate(year, month, day, hour) {
-    // Vallado's algorithm
-    if (month <= 2) {
-      year -= 1;
-      month += 12;
-    }
-    const A = Math.floor(year / 100);
-    const B = 2 - A + Math.floor(A / 4);
-    const jd = Math.floor(365.25 * (year + 4716)) + Math.floor(30.6001 * (month + 1)) + day + B - 1524.5 + hour / 24.0;
-    return jd;
-  }
-
-  function calcGMST0(year, month, day, hour, omega) {
-    // Returns GMST angle in radians at the given UT (matching filter_functions.py eci2ecef)
-    const jd = calcJulianDate(year, month, day, hour);
-    const T_UT = (jd - 2451545) / 36525.0;
-    let theta_gmst_0_hr = 100.4606184 + 36000.77005361 * T_UT + 0.00038793 * T_UT * T_UT - 2.6e-8 * T_UT * T_UT * T_UT;
-    theta_gmst_0_hr = (theta_gmst_0_hr * Math.PI) / 180.0; // deg to rad
-    // Add omega * seconds since midnight
-    const seconds = hour * 3600;
-    let theta_gmst = theta_gmst_0_hr + omega * seconds;
-    theta_gmst = theta_gmst % (2 * Math.PI);
-    return theta_gmst;
-  }
-
-  // Get t0 from trajectory start
-  const trajStartDate = trajArr[0].times[0] ? new Date(trajArr[0].times[0]) : trajStart;
-  const year0 = trajStartDate.getUTCFullYear();
-  const month0 = trajStartDate.getUTCMonth() + 1;
-  const day0 = trajStartDate.getUTCDate();
-  const hour0 = trajStartDate.getUTCHours() + trajStartDate.getUTCMinutes() / 60 + trajStartDate.getUTCSeconds() / 3600;
-  const omega = 7.2921159e-5; // rad/s
-  const theta_gmst0 = calcGMST0(year0, month0, day0, hour0, omega);
-
-  function getDensityForTime(sat, currentTime) {
-    // Find the latest density time <= currentTime
-    let idx = 0;
-    while (idx < times.length-1 && currentTime >= times[idx+1]) idx++;
-    if (!dens[sat]) {
-      console.warn('No density data for satellite:', sat, 'in current model:', currentModel);
-      return 1e-13; // fallback value
-    }
-    return dens[sat][idx];
-  }
-
-  function updateFrame(i) {
-    // Update globe: move each satellite's marker and color by density at the correct density time
-    const names = getActiveSatNames();
-    const currentTime = trajTimes[i];
-    
-    // Calculate GMST for coordinate transformation
-    const year = currentTime.getUTCFullYear();
-    const month = currentTime.getUTCMonth() + 1;
-    const day = currentTime.getUTCDate();
-    const hour = currentTime.getUTCHours() + currentTime.getUTCMinutes() / 60 + currentTime.getUTCSeconds() / 3600;
-    const gmstAngle = calcGMST0(year, month, day, hour, omega);
-    
-    // Earth texture stays fixed - no need to update it
-    
-    const update = { x: [], y: [], z: [], 'marker.color': [] };
-    names.forEach(sat => {
-      const idxTraj = satIndexMap[sat];
-      const eciPos = trajArr[idxTraj].path[i];
-      
-      // Transform ECI to ECEF coordinates
-      const ecefPos = eciToEcef(eciPos, gmstAngle);
-      
-      update.x.push([ecefPos[0]]);
-      update.y.push([ecefPos[1]]);
-      update.z.push([ecefPos[2]]);
-      
-      const densVal = getDensityForTime(sat, currentTime);
-      const color = getTurboColor(densVal, densMin, densMax);
-      update['marker.color'].push([color]);
-    });
-    // The globe mesh is trace 0, points are 1..N
-    Plotly.restyle('globe', update, Array.from({length:names.length}, (_,k)=>1+k));
-    
-    // Update time label (show current globe/trajectory time)
-    const t = trajTimes[i];
-    label.textContent = t.toISOString().replace('T', ' ').slice(0, 19);
-    slider.value = i;
-    
-    // Debug: log first satellite position for verification
-    if (names.length > 0 && i % 100 === 0) { // Log every 100th frame to avoid spam
-      const sat = names[0];
-      const idxTraj = satIndexMap[sat];
-      const eciPos = trajArr[idxTraj].path[i];
-      const ecefPos = eciToEcef(eciPos, gmstAngle);
-      const calculatedLatLon = ecefToLatLon(ecefPos);
-      const providedLatLon = trajArr[idxTraj].latlonalt[i];
-      
-      // Test different rotation offsets
-      const ecefPos0 = testEciToEcef(eciPos, gmstAngle, 0); // Current (+GMST+180°)
-      const ecefPosNeg = testEciToEcef(eciPos, gmstAngle, -Math.PI); // Remove the 180° offset (-GMST)
-      const ecefPosNoGMST = testEciToEcef(eciPos, 0, 0); // No rotation at all
-      const latLon0 = ecefToLatLon(ecefPos0);
-      const latLonNeg = ecefToLatLon(ecefPosNeg);
-      const latLonNoGMST = ecefToLatLon(ecefPosNoGMST);
-      
-      console.log(`Frame ${i}, Time: ${t.toISOString()}, GMST: ${(gmstAngle * 180 / Math.PI).toFixed(2)}°`);
-      console.log(`${sat} ECI: [${eciPos[0].toFixed(0)}, ${eciPos[1].toFixed(0)}, ${eciPos[2].toFixed(0)}]`);
-      console.log(`${sat} Provided Lat/Lon: [${providedLatLon[0].toFixed(2)}, ${providedLatLon[1].toFixed(2)}]`);
-      console.log(`${sat} Current (+GMST+180°): [${latLon0[0].toFixed(2)}, ${latLon0[1].toFixed(2)}] Diff: [${(latLon0[0] - providedLatLon[0]).toFixed(2)}, ${(latLon0[1] - providedLatLon[1]).toFixed(2)}]`);
-      console.log(`${sat} Just +GMST: [${latLonNeg[0].toFixed(2)}, ${latLonNeg[1].toFixed(2)}] Diff: [${(latLonNeg[0] - providedLatLon[0]).toFixed(2)}, ${(latLonNeg[1] - providedLatLon[1]).toFixed(2)}]`);
-      console.log(`${sat} No Rotation: [${latLonNoGMST[0].toFixed(2)}, ${latLonNoGMST[1].toFixed(2)}] Diff: [${(latLonNoGMST[0] - providedLatLon[0]).toFixed(2)}, ${(latLonNoGMST[1] - providedLatLon[1]).toFixed(2)}]`);
-      console.log('---');
-    }
-    // Update lat/lon map: move each satellite's marker
-    const latlonUpdate = { lon: [], lat: [], text: [] };
-    names.forEach(sat => {
-      const idxTraj = satIndexMap[sat];
-      latlonUpdate.lon.push([trajArr[idxTraj].latlonalt[i][1]]);
-      latlonUpdate.lat.push([trajArr[idxTraj].latlonalt[i][0]]);
-      latlonUpdate.text.push([`${sat}<br>Lat: ${trajArr[idxTraj].latlonalt[i][0].toFixed(2)}<br>Lon: ${trajArr[idxTraj].latlonalt[i][1].toFixed(2)}<br>Alt: ${trajArr[idxTraj].latlonalt[i][2].toFixed(2)} km`]);
-    });
-    Plotly.restyle('latlonmap', latlonUpdate, Array.from({length:names.length}, (_,k)=>k));
-  }
-
-  // --- DYNAMIC PLOT UPDATES ---
-  function updateAllPlots(i) {
-    const currentTime = trajTimes[i];
-    let k = 0;
-    while (k < times.length-1 && currentTime >= times[k+1]) k++;
-    // Density
-    const names = getActiveSatNames();
-    const traces = names.map((sat, idx) => ({
-      x: times.slice(0, k+1),
-      y: dens[sat].slice(0, k+1),
-      mode: 'lines',
-      name: sat,
-      line: { color: 'rgba(109, 193, 255, 0.4)', width: 2 },
-      opacity: 0.4,
-      legendgroup: sat,
-      hovertemplate: `${sat}: %{y:.2e}<extra></extra>`,
-      xaxis: 'x', yaxis: 'y1',
-    }));
-    traces.push({
-      x: times.slice(0, k+1), y: dens.model.slice(0, k+1),
-      mode: 'lines', name: 'HASDM',
-      line: { color: 'black', width: 1 },
-      legendgroup: 'model',
-      hovertemplate: 'HASDM: %{y:.2e}<extra></extra>',
-      xaxis: 'x', yaxis: 'y1',
-    });
-    traces.push({
-      ...makeMeanTrace(
-        { times: times.slice(0, k+1), ...Object.fromEntries(getActiveSatNames().map(s=>[s,dens[s].slice(0,k+1)])) },
-        'Mean (1)', 'orange'
-      ),
-      x: times.slice(0, k+1),
-      y: computeMean({ times: times.slice(0, k+1), ...Object.fromEntries(getActiveSatNames().map(s=>[s,dens[s].slice(0,k+1)])) })
-    });
-    if (dens2) {
-      // per-sat secondary
-      names.forEach((sat,i) => {
-        traces.push({
-          x: times.slice(0, k+1),
-          y: dens2[sat].slice(0, k+1),
-          mode: 'lines',
-          name: sat + ' (cmp)',
-          line: { color: 'rgba(0,200,100,0.4)', width: 2 },
-          legendgroup: sat + '_cmp',
-          hovertemplate: `${sat} cmp: %{y:.2e}<extra></extra>`,
-          xaxis: 'x', yaxis: 'y1'
-        });
-      });
-      // secondary mean
-      traces.push({
-        ...makeMeanTrace({times: times.slice(0,k+1), ...Object.fromEntries(getActiveSatNames().map(s=>[s,dens2[s].slice(0,k+1)]))}, 
-                         'Mean (2)', 'purple'),
-        x: times.slice(0, k+1),
-        y: computeMean({times: times.slice(0,k+1), ...Object.fromEntries(getActiveSatNames().map(s=>[s,dens2[s].slice(0,k+1)]))})
-      });
-    }
-    // Kp
-    const kp_idx = kp_times.findIndex(t => t > currentTime);
-    const kp_x = kp_idx === -1 ? kp_times : kp_times.slice(0, kp_idx);
-    const kp_y = kp_idx === -1 ? kp_vals : kp_vals.slice(0, kp_idx);
-    traces.push({
-      x: kp_x, y: kp_y,
-      mode: 'lines+markers', name: 'Kp',
-      line: { color: '#ff7f0e', width: 2, shape: 'hv' },
-      marker: { size: 4 },
-      hovertemplate: 'Kp: %{y}<extra></extra>',
-      xaxis: 'x', yaxis: 'y3',
-    });
-    // Dst
-    const dst_idx = dst_times.findIndex(t => t > currentTime);
-    const dst_x = dst_idx === -1 ? dst_times : dst_times.slice(0, dst_idx);
-    const dst_y = dst_idx === -1 ? dst_vals : dst_vals.slice(0, dst_idx);
-    traces.push({
-      x: dst_x, y: dst_y,
-      mode: 'lines+markers', name: 'Dst',
-      line: { color: '#2ca02c', width: 2 },
-      marker: { size: 4 },
-      hovertemplate: 'Dst: %{y}<extra></extra>',
-      xaxis: 'x', yaxis: 'y2',
-    });
-    try {
-      const [minTime, maxTime] = getDataTimeRange();
-      const updatedLayout = {
-        grid: { rows: 3, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
-        xaxis: { 
-          title: 'Time', 
-          tickformat: '%Y-%m-%d\n%H:%M', 
-          type: 'date', 
-          anchor: 'y3', 
-          domain: [0,1],
-          range: [minTime, maxTime]
+    (function initMap(){
+      const layout = {
+        geo:{
+          projection:{type:'natural earth'},
+          showland:true, landcolor:'#1e2533',
+          showcountries:true, countrycolor:'#47506a',
+          showocean:true, oceancolor:'#0e3954',
+          lataxis:{range:[-80,80]}, lonaxis:{range:[-180,180]},
+          bgcolor:'rgba(0,0,0,0)'
         },
-        yaxis:  { title: 'Density (kg/m³)', tickformat: '.2e', domain: [0.5, 1] },
-        yaxis2: { title: 'Dst (nT)', anchor: 'x', domain: [0.25, 0.5] },
-        yaxis3: { title: 'Kp Index', dtick: 1, anchor: 'x', domain: [0, 0.25] },
-        legend: { orientation: 'h', y: -0.2 },
-        margin: { t: 40, r: 20, l: 60, b: 60 },
-        hovermode: 'x unified',
-        showlegend: true
+        margin:{t:0,l:0,r:0,b:0},
+        paper_bgcolor:'rgba(0,0,0,0)',
+        plot_bgcolor:'rgba(0,0,0,0)'
       };
-      Plotly.react('timeseries', traces, updatedLayout);
-      Plotly.Plots.resize('timeseries');
-      window.dispatchEvent(new Event('resize'));
-    } catch (e) {
-      console.error('Plotly.react error:', e);
-    }
-  }
+      Plotly.newPlot('map', makeMapTraces(0), layout, {displaylogo:false, responsive:true});
+    })();
 
-  // --- SLIDER & ANIMATION ---
-  slider.oninput = () => {
-    if (anim) clearInterval(anim);
-    updateFrame(+slider.value);
-    updateAllPlots(+slider.value);
-  };
-  play.onclick = () => {
-    if (anim) clearInterval(anim);
-    let baseInterval = 60;
-    let minInterval = 5;
-    let interval = Math.max(minInterval, baseInterval / speed);
-    let stepSize = Math.max(1, Math.round(speed * baseInterval / Math.max(interval, 1)));
-    anim = setInterval(() => {
-      let i = +slider.value;
-      i = (i + stepSize) % nSteps;
-      updateFrame(i);
-      updateAllPlots(i);
-    }, interval);
-  };
-  pause.onclick = () => { if (anim) clearInterval(anim); };
+    // 3) Time series (3 rows: Density, Dst, Kp step)
+    function makeTimeseries(step){
+      const names = activeSatNames();
 
-  // Initial frame
-  updateFrame(0);
-  updateAllPlots(0);
+      const A = getModel(modelA.value);
+      const B = getModel(modelB.value);
+      const times = A ? parseTimes(A.times) : [];
 
-  // Add a colorbar legend for Turbo
-  function addTurboColorbar() {
-    const n = 100;
-    const colors = Array.from({length:n}, (_,i) => interpolateTurbo(i/(n-1)));
-    const values = Array.from({length:n}, (_,i) => densMin * Math.pow(densMax/densMin, i/(n-1)));
-    const trace = {
-      x: Array(n).fill(0),
-      y: values,
-      mode: 'markers',
-      marker: {
-        size: 16,
-        color: colors,
-      },
-      showlegend: false,
-      hoverinfo: 'y',
-      yaxis: 'y',
-    };
-    Plotly.newPlot('colorbar', [trace], {
-      margin: {t:10, b:30, l:60, r:10},
-      height: 300,
-      width: 80,
-      yaxis: {type: 'log', title: 'Density', autorange: true, tickformat: '.1e'},
-      xaxis: {visible: false},
-      title: 'Colorbar',
-    });
-  }
-  // Add a div for the colorbar
-  const colorbarDiv = document.createElement('div');
-  colorbarDiv.id = 'colorbar';
-  colorbarDiv.style.position = 'absolute';
-  colorbarDiv.style.right = '10px';
-  colorbarDiv.style.top = '60px';
-  colorbarDiv.style.width = '80px';
-  colorbarDiv.style.height = '300px';
-  document.body.appendChild(colorbarDiv);
-  addTurboColorbar();
+      // index into density times using current traj time
+      const ct = trajTimes[step];
+      let k=0; while(times.length && k<times.length-1 && ct>=times[k+1]) k++;
 
-  // --- DENSITY MODEL DROPDOWN HANDLER ---
-  const modelSelect = document.getElementById('density-model-select');
-  modelSelect.value = currentModel;
-  modelSelect.onchange = function() {
-    console.log('=== TIME-SERIES 1 DROPDOWN CHANGED ===');
-    console.log('POD Noise model changed from', currentModel, 'to', modelSelect.value);
-    currentModel = modelSelect.value;
-    dens = getDens(currentModel);
-    console.log('New density data loaded for model:', currentModel);
-    console.log('dens keys:', Object.keys(dens));
-    console.log('dens.times length:', dens.times ? dens.times.length : 'undefined');
-    
-    // Update times array with new density times
-    times.length = 0; // Clear the array
-    dens.times.forEach(t => times.push(new Date(t)));
-    console.log('Updated times array length:', times.length);
-    
-    // Recompute satNames from new density data
-    satNames.length = 0; // Clear the array
-    Object.keys(dens).forEach(k => {
-      if (!['model','mean','times'].includes(k)) satNames.push(k);
-    });
-    console.log('Available satellites in new model:', satNames);
-    console.log('Active satellites for current count:', getActiveSatNames());
-    console.log('makeDensityTraces function exists:', typeof makeDensityTraces);
-    console.log('makeDensityModelTrace function exists:', typeof makeDensityModelTrace);
-    
-    // Recreate the entire time series plot with new model
-    const [minTime, maxTime] = getDataTimeRange();
-    const updatedLayout = {
-      grid: { rows: 3, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
-      xaxis: { 
-        title: 'Time', 
-        tickformat: '%Y-%m-%d\n%H:%M', 
-        type: 'date', 
-        anchor: 'y3', 
-        domain: [0,1],
-        range: [minTime, maxTime]
-      },
-      yaxis:  { title: 'Density (kg/m³)', tickformat: '.2e', domain: [0.5, 1] },
-      yaxis2: { title: 'Dst (nT)', anchor: 'x', domain: [0.25, 0.5] },
-      yaxis3: { title: 'Kp Index', dtick: 1, anchor: 'x', domain: [0, 0.25] },
-      legend: { orientation: 'h', y: -0.2 },
-      margin: { t: 40, r: 20, l: 60, b: 60 },
-      hovermode: 'x unified',
-      showlegend: true
-    };
-    console.log('Creating traces...');
-    const densityTraces = makeDensityTraces();
-    const modelTrace = makeDensityModelTrace();
-    const meanTrace1 = makeMeanTrace(dens, 'Mean (1)', 'orange');
-    const meanTrace2 = dens2 ? makeMeanTrace(dens2, 'Mean (2)', 'purple') : null;
-    console.log('Density traces:', densityTraces.length);
-    console.log('Model trace:', modelTrace ? 'exists' : 'missing');
-    console.log('Mean trace 1:', meanTrace1 ? 'exists' : 'missing');
-    console.log('Mean trace 2:', meanTrace2 ? 'exists' : 'none');
-    
-    const newAllTraces = [
-      ...densityTraces,
-      modelTrace,
-      meanTrace1,
-      ...(meanTrace2 ? [meanTrace2] : []),
-      // Fresh Dst trace
-      ...(dst_times && dst_vals && dst_times.length > 0 && dst_vals.length > 0 ? [{
-        x: dst_times, y: dst_vals,
-        mode: 'lines+markers', name: 'Dst',
-        line: { color: '#2ca02c', width: 2 },
-        marker: { size: 4 },
-        hovertemplate: 'Dst: %{y}<extra></extra>',
-        xaxis: 'x', yaxis: 'y2',
-      }] : []),
-      // Fresh Kp trace
-      ...(kp_times && kp_vals && kp_times.length > 0 && kp_vals.length > 0 ? [{
-        x: kp_times, y: kp_vals,
-        mode: 'lines+markers', name: 'Kp',
-        line: { color: '#ff7f0e', width: 2, shape: 'hv' },
-        marker: { size: 4 },
-        hovertemplate: 'Kp: %{y}<extra></extra>',
-        xaxis: 'x', yaxis: 'y3',
-      }] : [])
-    ];
-    console.log('Total traces created:', newAllTraces.length);
-    try {
-      console.log('Calling Plotly.newPlot...');
-      Plotly.newPlot('timeseries', newAllTraces, updatedLayout);
-      Plotly.Plots.resize('timeseries');
-      window.dispatchEvent(new Event('resize'));
-      console.log('Plotly.newPlot completed successfully');
-    } catch (e) {
-      console.error('Plotly.newPlot error:', e);
-    }
-  };
+      const traces = [];
 
-  // --- SATELLITE COUNT DROPDOWN HANDLER ---
-  const satCountSelect = document.getElementById('sat-count-select');
-  satCountSelect.value = satCount; // Use satCount instead of nSats
-  satCountSelect.onchange = function() {
-    const oldSatCount = satCount;
-    satCount = parseInt(satCountSelect.value);
-    console.log('Satellite count changed from', oldSatCount, 'to:', satCount);
-    console.log('Available combos:', Object.keys(combos));
-    console.log('Active satellites:', getActiveSatNames());
-    console.log('All available satellites:', Object.keys(dens).filter(k => !['model','mean','times'].includes(k)));
-    
-    // validate anomaly spacing for new selection
-    validateCombo(satCount);
-    const i = +slider.value;
-    
-    // Recreate the entire time series plot with new satellite selection
-    const [minTime, maxTime] = getDataTimeRange();
-    const updatedLayout = {
-      grid: { rows: 3, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
-      xaxis: { 
-        title: 'Time', 
-        tickformat: '%Y-%m-%d\n%H:%M', 
-        type: 'date', 
-        anchor: 'y3', 
-        domain: [0,1],
-        range: [minTime, maxTime]
-      },
-      yaxis:  { title: 'Density (kg/m³)', tickformat: '.2e', domain: [0.5, 1] },
-      yaxis2: { title: 'Dst (nT)', anchor: 'x', domain: [0.25, 0.5] },
-      yaxis3: { title: 'Kp Index', dtick: 1, anchor: 'x', domain: [0, 0.25] },
-      legend: { orientation: 'h', y: -0.2 },
-      margin: { t: 40, r: 20, l: 60, b: 60 },
-      hovermode: 'x unified',
-      showlegend: true
-    };
-    const newAllTraces = [
-      ...makeDensityTraces(),
-      makeDensityModelTrace(),
-      makeMeanTrace(dens, 'Mean (1)', 'orange'),
-      ...(dens2 ? [ makeMeanTrace(dens2, 'Mean (2)', 'purple') ] : []),
-      dstTrace,
-      kpTrace
-    ];
-    console.log('Creating', newAllTraces.length, 'traces for', getActiveSatNames().length, 'satellites');
-    try {
-      Plotly.newPlot('timeseries', newAllTraces, updatedLayout);
-      Plotly.Plots.resize('timeseries');
-      window.dispatchEvent(new Event('resize'));
-    } catch (e) {
-      console.error('Plotly.newPlot error:', e);
-    }
-    
-    // re-render globe and map with new satCount
-    const currentSliderIndex = +slider.value;
-    const currentTime = trajTimes[currentSliderIndex];
-    if (earthImg.complete && earthImg.naturalWidth > 0) {
-      const rotatedGlobe = createSimpleTexturedGlobe();
-      Plotly.newPlot('globe', [rotatedGlobe, ...makeOrbitPoints(currentSliderIndex)], globeLayout);
-    } else {
-      // Use fallback if texture not loaded - need to create a fallback trace
-      const fallbackSurface = v.map((phi, i) => u.map((theta, j) => {
-        const lat = 90 - (phi * 180 / Math.PI);
-        const lon = (theta * 180 / Math.PI) - 180;
-        let isLand = false;
-        if (lat > 25 && lat < 70 && lon > -160 && lon < -50) isLand = true;
-        if (lat > -55 && lat < 15 && lon > -80 && lon < -35) isLand = true;
-        if (lat > 35 && lat < 70 && lon > -10 && lon < 40) isLand = true;
-        if (lat > -35 && lat < 35 && lon > -20 && lon < 50) isLand = true;
-        if (lat > 5 && lat < 75 && lon > 40 && lon < 180) isLand = true;
-        if (lat > -45 && lat < -10 && lon > 110 && lon < 160) isLand = true;
-        return isLand ? 0.7 : 0.2;
-      }));
-      const fallbackGlobe = {
-        type: 'surface', x: xs0, y: ys0, z: zs0,
-        surfacecolor: fallbackSurface, cmin: 0, cmax: 1,
-        colorscale: [[0, 'rgb(65, 105, 225)'], [0.5, 'rgb(100, 149, 237)'], [0.6, 'rgb(144, 238, 144)'], [1, 'rgb(34, 139, 34)']],
-        showscale: false, opacity: 1.0, hoverinfo: 'skip'
+      // --- HASDM model line (from series A's model) ---
+      if (A && Array.isArray(A.model)){
+        traces.push({
+          x: sliceToIdx(times,k), y: sliceToIdx(A.model,k),
+          mode:'lines', name:'HASDM',
+          line:{width:2, color: HASDM_COLOR},
+          hovertemplate:'HASDM: %{y:.2e}<extra></extra>',
+          xaxis:'x', yaxis:'y1'
+        });
+      }
+
+      // --- Per-satellite lines for A (unified blue, translucent) ---
+      if (A){
+        names.forEach((nm)=>{
+          if(!A[nm]) return;
+          traces.push({
+            x: sliceToIdx(times,k), y: sliceToIdx(A[nm],k),
+            mode:'lines', name: nm, showlegend:false,
+            line:{width:1.2, color: COLOR_A_BASE},
+            hovertemplate:`${nm}: %{y:.2e}<extra></extra>`,
+            xaxis:'x', yaxis:'y1'
+          });
+        });
+        // Mean A (bold, darker blue)
+        const meanA = meanSeries(A, names);
+        traces.push({
+          x: sliceToIdx(times,k), y: sliceToIdx(meanA,k),
+          mode:'lines', name:'Mean (A)',
+          line:{width:3, color: MEAN_A_COLOR},
+          hovertemplate:'Mean (A): %{y:.2e}<extra></extra>',
+          xaxis:'x', yaxis:'y1'
+        });
+      }
+
+      // --- Per-satellite lines for B (optional, unified red) ---
+      if (B){
+        const timesB = parseTimes(B.times);
+        let kb=0; while(timesB.length && kb<timesB.length-1 && ct>=timesB[kb+1]) kb++;
+        names.forEach((nm)=>{
+          if(!B[nm]) return;
+          traces.push({
+            x: sliceToIdx(timesB,kb), y: sliceToIdx(B[nm],kb),
+            mode:'lines', name: nm+' (B)', showlegend:false,
+            line:{width:1.2, color: COLOR_B_BASE},
+            hovertemplate:`${nm} (B): %{y:.2e}<extra></extra>`,
+            xaxis:'x', yaxis:'y1'
+          });
+        });
+        const meanB = meanSeries(B, names);
+        traces.push({
+          x: sliceToIdx(timesB,kb), y: sliceToIdx(meanB,kb),
+          mode:'lines', name:'Mean (B)',
+          line:{width:3, color: MEAN_B_COLOR},
+          hovertemplate:'Mean (B): %{y:.2e}<extra></extra>',
+          xaxis:'x', yaxis:'y1'
+        });
+      }
+
+      // --- Dst ---
+      let kd=0; while(kd<dstTimes.length-1 && ct>=dstTimes[kd+1]) kd++;
+      const dstTrace = {
+        x: sliceToIdx(dstTimes,kd), y: sliceToIdx(dstVals,kd),
+        mode:'lines+markers', name:'Dst', line:{width:2, color:'#7bd88f'},
+        marker:{size:4}, xaxis:'x', yaxis:'y2', hovertemplate:'Dst: %{y}<extra></extra>'
       };
-      Plotly.newPlot('globe', [fallbackGlobe, ...makeOrbitPoints(currentSliderIndex)], globeLayout);
+
+      // --- Kp (step-like) ---
+      let kk=0; while(kk<kpTimes.length-1 && ct>=kpTimes[kk+1]) kk++;
+      const kpTrace = {
+        x: sliceToIdx(kpTimes,kk), y: sliceToIdx(kpVals,kk),
+        mode:'lines', name:'Kp', line:{width:2, color:'#ffb86b', shape:'hv'},
+        xaxis:'x', yaxis:'y3', hovertemplate:'Kp: %{y}<extra></extra>'
+      };
+
+      const layout = {
+        grid:{rows:3, columns:1, pattern:'independent', roworder:'top to bottom'},
+        xaxis:{
+          title:'Time', type:'date', tickformat:'%b %d\n%H:%M', anchor:'y3', domain:[0,1],
+          range:['2023-04-21T00:00:00Z','2023-04-28T00:00:00Z']
+        },
+        yaxis:{title:'Density (kg/m³)', tickformat:'.2e', domain:[0.56,1], rangemode:'tozero'},
+        yaxis2:{title:'Dst (nT)', domain:[0.28,0.56]},
+        yaxis3:{title:'Kp', dtick:3, domain:[0,0.28]},
+        legend:{orientation:'h', y:-0.18, font:{color:'#d5d9e5'}},
+        margin:{t:10,l:60,r:20,b:70},
+        paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+        font:{color:'#e7e9ee'}, hovermode:'x unified'
+      };
+
+      Plotly.react('timeseries', [...traces, dstTrace, kpTrace], layout, {displaylogo:false, responsive:true});
     }
-    Plotly.newPlot('latlonmap', makeLatlonTraces(currentSliderIndex), latlonLayout);
-    updateFrame(currentSliderIndex);
-    updateAllPlots(currentSliderIndex);
-  };
-})();
-</script>
+
+    // Initial render
+    makeTimeseries(0);
+
+    // Position updates (globe & map) + time label
+    const densMin = 0.7e-13, densMax = 8e-13;
+    function updateScene(step){
+      // time label
+      $('tlabel').textContent = trajTimes[step].toISOString().replace('T',' ').slice(0,19);
+
+      // Globe: update satellite markers
+      const names = activeSatNames();
+      const updates = {x:[], y:[], z:[], 'marker.color':[]};
+      const A = getModel(modelA.value);
+      const times = parseTimes(A.times);
+      // find density index for current time
+      const ct = trajTimes[step];
+      let k=0; while(k<times.length-1 && ct>=times[k+1]) k++;
+
+      names.forEach((nm)=>{
+        const i = satIndex[nm]; if(i===undefined) return;
+        const pos = (trajArr[i].path?.[step]) || [0,0,0];
+        updates.x.push([pos[0]]);
+        updates.y.push([pos[1]]);
+        updates.z.push([pos[2]]);
+        const val = (A[nm]?.[k]) ?? 1e-13;
+        updates['marker.color'].push([turbo(val, densMin, densMax)]);
+      });
+      // traces: 0 is earth surface, markers start at 1
+      const idxs = Array.from({length:names.length},(_,j)=>1+j);
+      Plotly.restyle('globe', updates, idxs);
+
+      // Map
+      Plotly.react('map', makeMapTraces(step), {
+        geo:{
+          projection:{type:'natural earth'}, showland:true, landcolor:'#1e2533',
+          showcountries:true, countrycolor:'#47506a', showocean:true, oceancolor:'#0e3954',
+          lataxis:{range:[-80,80]}, lonaxis:{range:[-180,180]}, bgcolor:'rgba(0,0,0,0)'
+        },
+        margin:{t:0,l:0,r:0,b:0}, paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)'
+      }, {displaylogo:false, responsive:true});
+
+      // Time series to current time
+      makeTimeseries(step);
+    }
+
+    /* ---------- Controls ---------- */
+    const slider = $('slider'); slider.max = String(nSteps-1); slider.value = '0';
+
+    let playing = false, timer = null;
+    function speedMs(){
+      const s = $('speed').value;
+      const mult = parseInt(s) || parseInt(s.replace('x','')) || 1;
+      return Math.max(20, 400 / Math.max(1,mult));
+    }
+
+    function play(){
+      if(playing) return;
+      playing = true;
+      timer = setInterval(()=>{
+        let i = parseInt(slider.value,10);
+        i = (i+1) % nSteps;
+        slider.value = String(i);
+        updateScene(i);
+      }, speedMs());
+    }
+    function pause(){
+      playing = false;
+      if(timer){ clearInterval(timer); timer=null; }
+    }
+
+    $('play').onclick = ()=>{ pause(); play(); };
+    $('pause').onclick = ()=>{ pause(); };
+    $('speed').onchange = ()=>{ if(playing){ pause(); play(); } };
+    slider.oninput = ()=>{ pause(); updateScene(parseInt(slider.value,10)); };
+
+    satCountSel.onchange = ()=>{
+      satCount = parseInt(satCountSel.value,10);
+      // re-seed globe traces to match new satellite count
+      // easiest: rebuild globe with new marker set
+      (function resetGlobe(){
+        const gd = document.getElementById('globe');
+        const data = gd.data || [];
+        const earth = data[0]; // keep surface
+        const names = activeSatNames();
+        const markers = names.map((nm,i)=>({
+          type:'scatter3d', mode:'markers',
+          x:[0], y:[0], z:[0],
+          marker:{size:5, color:colorRamp(names.length,i)},
+          name:nm, showlegend:false, hoverinfo:'skip'
+        }));
+        Plotly.react('globe', [earth, ...markers], gd.layout, {displaylogo:false, responsive:true});
+      })();
+      updateScene(parseInt(slider.value,10));
+    };
+
+    modelA.onchange = ()=>{
+      modelAData = getModel(modelA.value);
+      updateScene(parseInt(slider.value,10));
+    };
+    modelB.onchange = ()=>{
+      updateScene(parseInt(slider.value,10));
+    };
+
+    // First paint
+    status.textContent = `Ready · ${activeSatNames().length} sats`;
+    updateScene(0);
+  })();
+  </script>
 </body>
 </html>
