@@ -399,24 +399,10 @@
     dstTrace,
     kpTrace
   ];
-  // Function to get the actual data time range
+  // Function to get the fixed time range for axes
   function getDataTimeRange() {
-    const allTimes = [...times];
-    if (kp_times.length > 0) allTimes.push(...kp_times);
-    if (dst_times.length > 0) allTimes.push(...dst_times);
-    
-    if (allTimes.length === 0) {
-      return ['2023-04-21T00:00:00', '2023-04-28T23:59:59'];
-    }
-    
-    const minTime = new Date(Math.min(...allTimes.map(t => new Date(t).getTime())));
-    const maxTime = new Date(Math.max(...allTimes.map(t => new Date(t).getTime())));
-    
-    // Add small padding (1 hour on each side)
-    const paddedMin = new Date(minTime.getTime() - 60*60*1000);
-    const paddedMax = new Date(maxTime.getTime() + 60*60*1000);
-    
-    return [paddedMin.toISOString(), paddedMax.toISOString()];
+    // Fixed range: April 21-28, 2023
+    return ['2023-04-21T00:00:00', '2023-04-28T23:59:59'];
   }
 
   // Densities plot: top half, Dst/Kp in bottom half (no F10.7)
@@ -1172,14 +1158,18 @@
   const modelSelect = document.getElementById('density-model-select');
   modelSelect.value = currentModel;
   modelSelect.onchange = function() {
+    console.log('=== TIME-SERIES 1 DROPDOWN CHANGED ===');
     console.log('POD Noise model changed from', currentModel, 'to', modelSelect.value);
     currentModel = modelSelect.value;
     dens = getDens(currentModel);
     console.log('New density data loaded for model:', currentModel);
+    console.log('dens keys:', Object.keys(dens));
+    console.log('dens.times length:', dens.times ? dens.times.length : 'undefined');
     
     // Update times array with new density times
     times.length = 0; // Clear the array
     dens.times.forEach(t => times.push(new Date(t)));
+    console.log('Updated times array length:', times.length);
     
     // Recompute satNames from new density data
     satNames.length = 0; // Clear the array
@@ -1188,6 +1178,8 @@
     });
     console.log('Available satellites in new model:', satNames);
     console.log('Active satellites for current count:', getActiveSatNames());
+    console.log('makeDensityTraces function exists:', typeof makeDensityTraces);
+    console.log('makeDensityModelTrace function exists:', typeof makeDensityModelTrace);
     
     // Recreate the entire time series plot with new model
     const [minTime, maxTime] = getDataTimeRange();
@@ -1209,18 +1201,47 @@
       hovermode: 'x unified',
       showlegend: true
     };
+    console.log('Creating traces...');
+    const densityTraces = makeDensityTraces();
+    const modelTrace = makeDensityModelTrace();
+    const meanTrace1 = makeMeanTrace(dens, 'Mean (1)', 'orange');
+    const meanTrace2 = dens2 ? makeMeanTrace(dens2, 'Mean (2)', 'purple') : null;
+    console.log('Density traces:', densityTraces.length);
+    console.log('Model trace:', modelTrace ? 'exists' : 'missing');
+    console.log('Mean trace 1:', meanTrace1 ? 'exists' : 'missing');
+    console.log('Mean trace 2:', meanTrace2 ? 'exists' : 'none');
+    
     const newAllTraces = [
-      ...makeDensityTraces(),
-      makeDensityModelTrace(),
-      makeMeanTrace(dens, 'Mean (1)', 'orange'),
-      ...(dens2 ? [ makeMeanTrace(dens2, 'Mean (2)', 'purple') ] : []),
-      dstTrace,
-      kpTrace
+      ...densityTraces,
+      modelTrace,
+      meanTrace1,
+      ...(meanTrace2 ? [meanTrace2] : []),
+      // Fresh Dst trace
+      {
+        x: dst_times, y: dst_vals,
+        mode: 'lines+markers', name: 'Dst',
+        line: { color: '#2ca02c', width: 2 },
+        marker: { size: 4 },
+        hovertemplate: 'Dst: %{y}<extra></extra>',
+        xaxis: 'x', yaxis: 'y2',
+      },
+      // Fresh Kp trace
+      {
+        x: kp_times, y: kp_vals,
+        mode: 'lines+markers', name: 'Kp',
+        line: { color: '#ff7f0e', width: 2, shape: 'hv' },
+        marker: { size: 4 },
+        hovertemplate: 'Kp: %{y}<extra></extra>',
+        xaxis: 'x', yaxis: 'y3',
+      }
     ];
+    console.log('Total traces created:', newAllTraces.length);
     try {
+      console.log('Calling Plotly.newPlot...');
       Plotly.newPlot('timeseries', newAllTraces, updatedLayout);
       Plotly.Plots.resize('timeseries');
       window.dispatchEvent(new Event('resize'));
+      console.log('Plotly.newPlot completed successfully');
     } catch (e) {
       console.error('Plotly.newPlot error:', e);
     }
