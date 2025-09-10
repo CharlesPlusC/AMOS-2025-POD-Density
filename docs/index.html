@@ -226,10 +226,6 @@
     } catch (e) {
       console.error('Plotly.newPlot error:', e);
     }
-    
-    // refresh plots with both models
-    updateFrame(+slider.value);
-    updateAllPlots(+slider.value);
   };
   const trajArr = dashData.trajectories;
   // map satellite name to its index in trajArr
@@ -266,7 +262,6 @@
   // --- Update satNames, satColors, and all plots based on satCount ---
   function getActiveSatNames() {
     const result = combos[satCount] || [];
-    console.log('getActiveSatNames called with satCount:', satCount, 'returning:', result);
     return result;
   }
   function getActiveSatColors() {
@@ -305,7 +300,6 @@
   // Order: Density, Dst, Kp
   function makeDensityTraces() {
     const names = getActiveSatNames();
-    console.log('makeDensityTraces called with active satellites:', names);
     const traces = [];
     // primary model (blue)
     names.forEach(sat => {
@@ -339,7 +333,6 @@
         }
       });
     }
-    console.log('makeDensityTraces returning', traces.length, 'traces');
     return traces;
   }
   function makeDensityModelTrace() {
@@ -1217,23 +1210,23 @@
       meanTrace1,
       ...(meanTrace2 ? [meanTrace2] : []),
       // Fresh Dst trace
-      {
+      ...(dst_times && dst_vals && dst_times.length > 0 && dst_vals.length > 0 ? [{
         x: dst_times, y: dst_vals,
         mode: 'lines+markers', name: 'Dst',
         line: { color: '#2ca02c', width: 2 },
         marker: { size: 4 },
         hovertemplate: 'Dst: %{y}<extra></extra>',
         xaxis: 'x', yaxis: 'y2',
-      },
+      }] : []),
       // Fresh Kp trace
-      {
+      ...(kp_times && kp_vals && kp_times.length > 0 && kp_vals.length > 0 ? [{
         x: kp_times, y: kp_vals,
         mode: 'lines+markers', name: 'Kp',
         line: { color: '#ff7f0e', width: 2, shape: 'hv' },
         marker: { size: 4 },
         hovertemplate: 'Kp: %{y}<extra></extra>',
         xaxis: 'x', yaxis: 'y3',
-      }
+      }] : [])
     ];
     console.log('Total traces created:', newAllTraces.length);
     try {
@@ -1245,10 +1238,6 @@
     } catch (e) {
       console.error('Plotly.newPlot error:', e);
     }
-    
-    // Update all plots to reflect new model
-    updateFrame(+slider.value);
-    updateAllPlots(+slider.value);
   };
 
   // --- SATELLITE COUNT DROPDOWN HANDLER ---
@@ -1304,10 +1293,11 @@
     }
     
     // re-render globe and map with new satCount
-    const currentTime = trajTimes[i];
+    const currentSliderIndex = +slider.value;
+    const currentTime = trajTimes[currentSliderIndex];
     if (earthImg.complete && earthImg.naturalWidth > 0) {
       const rotatedGlobe = createSimpleTexturedGlobe();
-      Plotly.newPlot('globe', [rotatedGlobe, ...makeOrbitPoints(i)], globeLayout);
+      Plotly.newPlot('globe', [rotatedGlobe, ...makeOrbitPoints(currentSliderIndex)], globeLayout);
     } else {
       // Use fallback if texture not loaded - need to create a fallback trace
       const fallbackSurface = v.map((phi, i) => u.map((theta, j) => {
@@ -1328,11 +1318,11 @@
         colorscale: [[0, 'rgb(65, 105, 225)'], [0.5, 'rgb(100, 149, 237)'], [0.6, 'rgb(144, 238, 144)'], [1, 'rgb(34, 139, 34)']],
         showscale: false, opacity: 1.0, hoverinfo: 'skip'
       };
-      Plotly.newPlot('globe', [fallbackGlobe, ...makeOrbitPoints(i)], globeLayout);
+      Plotly.newPlot('globe', [fallbackGlobe, ...makeOrbitPoints(currentSliderIndex)], globeLayout);
     }
-    Plotly.newPlot('latlonmap', makeLatlonTraces(i), latlonLayout);
-    updateFrame(i);
-    updateAllPlots(i);
+    Plotly.newPlot('latlonmap', makeLatlonTraces(currentSliderIndex), latlonLayout);
+    updateFrame(currentSliderIndex);
+    updateAllPlots(currentSliderIndex);
   };
 })();
 </script>
