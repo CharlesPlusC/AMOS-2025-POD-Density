@@ -83,7 +83,7 @@
       <button class="tab" id="tab-rms">RMS Error Explorer</button>
       <button class="tab active" id="tab-storm">Storm Time Density Inversion</button>
       <span class="spacer"></span>
-      <a href="./POD_Assimilation___AMOS_2025-14.pdf" target="_blank" class="small" style="margin-right:12px;">📄 Paper (PDF)</a>
+      <a href="./POD_Assimilation___AMOS_2025-14.pdf" target="_blank" class="small" style="margin-right:12px;">📄 AMOS 2025 Paper (PDF)</a>
       <a href="https://charlesplusc.github.io/" target="_blank" class="small" style="margin-right:12px;">Personal Website</a>
       <span id="status" class="mono">Loading…</span>
     </div>
@@ -135,7 +135,7 @@
       <div class="card stack">
         <h3>Notes</h3>
         <div class="small">
-          This dashboard displays results from the paper showing time series of atmospheric densities retrieved for simulated POD data of different noise levels. The visualization demonstrates how satellite constellation density retrievals perform during geomagnetic storm conditions, comparing various POD noise levels (Low, Medium, High) and their assimilated counterparts. The think blue series represents densities from one configuration, while the light red series represents another. The thick lines of the same colour are the mean of those thin lines.
+          This dashboard displays the storm time density inversion results from the paper. The visualization demonstrates how POD density retrievals perform during the April 2023 storm, comparing different POD noise levels (Low, Medium, High) and their assimilated counterparts. The think blue series represents densities from one configuration, while the light red series represents another. The thick lines of the same colour are the mean of those thin lines. For more details see the full paper.
         </div>
       </div>
     </aside>
@@ -143,7 +143,7 @@
     <!-- Plots -->
     <main>
       <div class="plots">
-        <div class="card"><h3>Inertial View (colour = Time Series 1)</h3><div id="globe"></div></div>
+        <div class="card"><h3>Inertial View (colour = Density Time Series 1)</h3><div id="globe"></div></div>
         <div class="card"><h3>Lat / Lon Tracks</h3><div id="map"></div></div>
       </div>
       <div class="card">
@@ -223,7 +223,7 @@
           <div class="small" id="rms_blurb" style="margin-top:0px;opacity:0.85;">
             <p><strong>Disclaimer:</strong> All models are wrong. Some are useful. This tool provides approximations based on simulations. It is in no way a replacement for a full simulation, much less processing of real POD data. It is intended to support discussions and early design processes for density model developers and the satellite operations community.</p>
             
-            <p>This tool provides estimates of the expected RMS density retrieval error (RMS% err.) achieved using the Energy Dissipation Rate method as a function of satellite count and fit-span used (number of integer orbits over which the energy is measured), and POD noise level. Densities are taken from the MSIS-00 model, using the selected F10.7 and Ap values to give the globally averaged density at the chosen altitude.</p>
+            <p>This tool provides estimates of the expected RMS density retrieval error (RMS% err.) achieved using the Energy Dissipation Rate method as a function of satellite count and fit-span used (number of integer orbits over which the energy is measured), and POD noise level. "Satellite count" refers to the number of equally spaced satellites along a single orbit which are used to resolve a single orbit-averaged density. Density values are taken from the MSIS-00 model, using the selected F10.7 and Ap values to give the globally averaged density at the chosen altitude.</p>
 
             <p>Error maps show the expected median retrieval error under those conditions based on the experiments presented in the paper. The default area-to-mass ratio is 0.005 (equivalent to Starlink 'open-book' configuration).</p>
             
