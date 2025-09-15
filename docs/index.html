@@ -58,7 +58,8 @@
     .plots{
       display:grid; grid-template-columns: 1fr 1fr; gap:12px; height:100%;
     }
-    #globe,#map{height:100%}
+    #globe{height:100%}
+    #map{height:85%}
     #timeseries{height:100%}
     .legend-note{color:var(--muted); font-size:12px; margin-top:-4px}
     .spacer{flex:1}
@@ -79,9 +80,11 @@
   <header>
     <div class="title">Satellite Density Dashboard</div>
     <div class="row small tabs">
-      <button class="tab active" id="tab-storm">StormTimeDensityInversion</button>
       <button class="tab" id="tab-rms">RMS Error Explorer</button>
+      <button class="tab active" id="tab-storm">Storm Time Density Inversion</button>
       <span class="spacer"></span>
+      <a href="./POD_Assimilation___AMOS_2025-14.pdf" target="_blank" class="small" style="margin-right:12px;">📄 Paper (PDF)</a>
+      <a href="https://charlesplusc.github.io/" target="_blank" class="small" style="margin-right:12px;">Personal Website</a>
       <span id="status" class="mono">Loading…</span>
     </div>
   </header>
@@ -98,8 +101,7 @@
           <div class="spacer"></div>
           <label class="small">Speed</label>
           <select id="speed">
-            <option>1x</option><option>2x</option><option>5x</option>
-            <option>10x</option><option>25x</option><option>50x</option>
+            <option selected>1000x</option><option>10000x</option><option>100000x</option>
           </select>
         </div>
         <input id="slider" type="range" min="0" max="1" step="1" value="0"/>
@@ -133,9 +135,7 @@
       <div class="card stack">
         <h3>Notes</h3>
         <div class="small">
-          - Built for GitHub Pages (static).<br/>
-          - Uses <code class="mono">docs/dashboard_data.json</code>.<br/>
-          - No external textures; robust and lightweight.
+          This dashboard displays results from the paper showing time series of atmospheric densities retrieved for simulated POD data of different noise levels. The visualization demonstrates how satellite constellation density retrievals perform during geomagnetic storm conditions, comparing various POD noise levels (Low, Medium, High) and their assimilated counterparts. The think blue series represents densities from one configuration, while the light red series represents another. The thick lines of the same colour are the mean of those thin lines.
         </div>
       </div>
     </aside>
@@ -143,11 +143,11 @@
     <!-- Plots -->
     <main>
       <div class="plots">
-        <div class="card"><h3>Inertial View</h3><div id="globe"></div></div>
+        <div class="card"><h3>Inertial View (colour = Time Series 1)</h3><div id="globe"></div></div>
         <div class="card"><h3>Lat / Lon Tracks</h3><div id="map"></div></div>
       </div>
       <div class="card">
-        <h3>Density (top), Dst (middle), Kp (bottom)</h3>
+        <h3>Density and SWx Indices Time Series</h3>
         <div id="timeseries"></div>
       </div>
     </main>
@@ -158,27 +158,23 @@
     <div class="wrap">
       <aside>
         <div class="card stack">
-          <h2 id="rms_title">RMS Error Explorer</h2>
+          <h2 id="rms_title">RMS Error Predictor</h2>
           <p class="small" style="margin:4px 0 0 0;opacity:0.9">POD noise tiers (3D RMS): Low ≈ 0.30 m · Medium ≈ 0.458 m · High ≈ 1.80 m</p>
-          <p class="small" id="rms_blurb" style="margin-top:-6px;opacity:0.85;">
-            Compare configurations — set parameters for Panel A and Panel B below.
-            <br>Placeholder: Briefly explain that RMS is predicted model error (%) vs. number of satellites and fit-span (orbits) using MSIS-derived densities.
-          </p>
         </div>
         <div class="card stack">
           <h3>Panel A</h3>
           <div class="control-grid">
             <div>
-              <label>Noise tier (calibration)</label>
+              <label>Noise Level</label>
               <select id="rmsA_tier">
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
+                <option value="high">High (1.8m)</option>
+                <option value="medium">Medium (0.458m)</option>
+                <option value="low">Low (0.3m)</option>
               </select>
             </div>
             <div>
               <label>AMR (m²/kg)</label>
-              <input id="rmsA_amr" type="number" min="0" max="1" step="0.001" value="0.005"/>
+              <input id="rmsA_amr" type="number" min="0" max="1" step="0.0001" value="0.005"/>
             </div>
             <div>
               <label>Altitude (km)</label>
@@ -198,16 +194,16 @@
           <h3>Panel B</h3>
           <div class="control-grid">
             <div>
-              <label>Noise tier (calibration)</label>
+              <label>Noise Level</label>
               <select id="rmsB_tier">
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low" selected>Low</option>
+                <option value="high" selected>High (1.8m)</option>
+                <option value="medium">Medium (0.458m)</option>
+                <option value="low">Low (0.3m)</option>
               </select>
             </div>
             <div>
               <label>AMR (m²/kg)</label>
-              <input id="rmsB_amr" type="number" min="0" max="1" step="0.001" value="0.005"/>
+              <input id="rmsB_amr" type="number" min="0" max="1" step="0.0001" value="0.005"/>
             </div>
             <div>
               <label>Altitude (km)</label>
@@ -221,6 +217,17 @@
               <label>Ap</label>
               <input id="rmsB_ap" type="number" min="0" max="400" step="1" value="10"/>
             </div>
+          </div>
+        </div>
+        <div class="card stack">
+          <div class="small" id="rms_blurb" style="margin-top:0px;opacity:0.85;">
+            <p><strong>Disclaimer:</strong> All models are wrong. Some are useful. This tool provides approximations based on simulations. It is in no way a replacement for a full simulation, much less processing of real POD data. It is intended to support discussions and early design processes for density model developers and the satellite operations community.</p>
+            
+            <p>This tool provides estimates of the expected RMS density retrieval error (RMS% err.) achieved using the Energy Dissipation Rate method as a function of satellite count and fit-span used (number of integer orbits over which the energy is measured), and POD noise level. Densities are taken from the MSIS-00 model, using the selected F10.7 and Ap values to give the globally averaged density at the chosen altitude.</p>
+
+            <p>Error maps show the expected median retrieval error under those conditions based on the experiments presented in the paper. The default area-to-mass ratio is 0.005 (equivalent to Starlink 'open-book' configuration).</p>
+            
+            <p><strong>Reference AMRs:</strong> GRACE-FO ≈0.002, Starlink 'shark-fin' ≈0.05, GOCE ≈0.0008, and 3U CubeSat ≈0.02.</p>
           </div>
         </div>
       </aside>
@@ -437,7 +444,14 @@
         plot_bgcolor:'rgba(0,0,0,0)',
         font:{color:var_ink()},
         xaxis:{title:'Fit-span (orbits)', dtick:1, range:[1,5]},
-        yaxis:{title:'# Satellites', rangemode:'tozero', range:[1,20]},
+        yaxis:{
+          title:'# Satellites', 
+          type:'log', 
+          range:[Math.log10(1), Math.log10(20)], 
+          tickmode:'array',
+          tickvals:[1, 2, 5, 10, 20],
+          ticktext:['1', '2', '5', '10', '20']
+        },
         title: hdr
       };
 
@@ -481,11 +495,6 @@
       return;
     }
 
-    // Expected structure:
-    // dash.combos: { "1": ["satA",...], "2": [...], ... }
-    // dash.densities_by_model: { modelKey: { times:[], model:[], SAT1:[], ... } }
-    // dash.trajectories: [{name, path:[[x,y,z],...], latlonalt:[[lat,lon,alt],...]}...]
-    // dash.kp: [{datetime, kp}], dash.dst: [{datetime, dst}]
     const combos = dash.combos || {};
     const models = dash.densities_by_model || { commercial: dash.densities };
     const modelKeys = Object.keys(models);
@@ -500,7 +509,21 @@
     // Populate selectors
     const modelA = $('modelA'), modelB = $('modelB');
     modelKeys.forEach(k=>{
-      const label = k.replace(/_/g,' ').replace(/\b\w/g, s=>s.toUpperCase());
+      console.log('Model key:', k); // Debug: see what the actual keys are
+      let label;
+      // Create custom labels for different model types
+      const lowerK = k.toLowerCase();
+      if(lowerK.includes('commercial') && !lowerK.includes('assimilated')) label = 'High (1.8m)';
+      else if(lowerK.includes('medium') && !lowerK.includes('assimilated')) label = 'Medium (0.458m)';
+      else if(lowerK.includes('low') && !lowerK.includes('assimilated')) label = 'Low (0.3m)';
+      else if(lowerK.includes('commercial') && lowerK.includes('assimilated')) label = 'High (assimilated)';
+      else if(lowerK.includes('medium') && lowerK.includes('assimilated')) label = 'Medium (assimilated)';
+      else if(lowerK.includes('low') && lowerK.includes('assimilated')) label = 'Low (assimilated)';
+      else {
+        // Fallback to original logic for any other keys
+        label = k.replace(/_/g,' ').replace(/\b\w/g, s=>s.toUpperCase());
+      }
+      
       const o1 = document.createElement('option'); o1.value=k; o1.textContent=label; modelA.appendChild(o1);
       const o2 = document.createElement('option'); o2.value=k; o2.textContent=label; modelB.appendChild(o2);
     });
@@ -598,16 +621,49 @@
         name:nm, showlegend:false, hoverinfo:'skip'
       }));
 
+      // Add a dummy colorbar trace for density legend - match the custom turbo colorscale
+      const turboColorscale = [
+        [0.0, 'rgb(34,136,234)'],   // Blue
+        [0.2, 'rgb(84,233,242)'],   // Cyan
+        [0.4, 'rgb(120,255,104)'],  // Green
+        [0.6, 'rgb(255,233,84)'],   // Yellow
+        [0.8, 'rgb(255,140,54)'],   // Orange
+        [1.0, 'rgb(220,38,127)']    // Purple/Pink
+      ];
+      
+      const colorbar = {
+        type:'scatter3d', mode:'markers',
+        x:[0], y:[0], z:[0], // invisible position
+        marker:{
+          size:0.1, // tiny invisible markers
+          // Use log values to match the turbo() function's log scaling
+          color:[Math.log10(0.7e-13), Math.log10(8e-13)], 
+          colorscale:turboColorscale,
+          showscale:true,
+          colorbar:{
+            title:{text:'Density (kg/m³)', font:{size:12, color:'#e7e9ee'}},
+            thickness:15,
+            len:0.7,
+            x:1.02,
+            tickmode:'array',
+            tickvals:[Math.log10(1e-13), Math.log10(2e-13), Math.log10(4e-13), Math.log10(8e-13)],
+            ticktext:['1e-13', '2e-13', '4e-13', '8e-13'],
+            tickfont:{size:10, color:'#e7e9ee'}
+          }
+        },
+        showlegend:false, hoverinfo:'skip'
+      };
+
       const layout = {
         scene:{
           xaxis:{visible:false}, yaxis:{visible:false}, zaxis:{visible:false},
           aspectmode:'data', bgcolor:'rgba(0,0,0,0)'
         },
-        margin:{t:0,l:0,r:0,b:0},
+        margin:{t:0,l:0,r:30,b:0},
         paper_bgcolor:'rgba(0,0,0,0)',
         plot_bgcolor:'rgba(0,0,0,0)'
       };
-      Plotly.newPlot('globe', [earth, ...markers], layout, {displaylogo:false, responsive:true});
+      Plotly.newPlot('globe', [earth, ...markers, colorbar], layout, {displaylogo:false, responsive:true});
     })();
 
     // 2) Lat/Lon map (tracks + current markers)
@@ -652,7 +708,7 @@
           lataxis:{range:[-80,80]}, lonaxis:{range:[-180,180]},
           bgcolor:'rgba(0,0,0,0)'
         },
-        margin:{t:0,l:0,r:0,b:0},
+        margin:{t:10,l:0,r:0,b:0},
         paper_bgcolor:'rgba(0,0,0,0)',
         plot_bgcolor:'rgba(0,0,0,0)'
       };
@@ -753,11 +809,11 @@
           title:'Time', type:'date', tickformat:'%b %d\n%H:%M', anchor:'y3', domain:[0,1],
           range:['2023-04-21T00:00:00Z','2023-04-28T00:00:00Z']
         },
-        yaxis:{title:'Density (kg/m³)', tickformat:'.2e', domain:[0.56,1], rangemode:'tozero'},
+        yaxis:{title:'Density (kg/m³)', tickformat:'.2e', domain:[0.56,1], range:[0, 8e-13], autorange:false},
         yaxis2:{title:'Dst (nT)', domain:[0.28,0.56]},
         yaxis3:{title:'Kp', dtick:3, domain:[0,0.28]},
         legend:{orientation:'h', y:-0.18, font:{color:'#d5d9e5'}},
-        margin:{t:10,l:60,r:20,b:70},
+        margin:{t:10,l:80,r:20,b:70},
         paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
         font:{color:'#e7e9ee'}, hovermode:'x unified'
       };
@@ -803,7 +859,7 @@
           showcountries:true, countrycolor:'#47506a', showocean:true, oceancolor:'#0e3954',
           lataxis:{range:[-80,80]}, lonaxis:{range:[-180,180]}, bgcolor:'rgba(0,0,0,0)'
         },
-        margin:{t:0,l:0,r:0,b:0}, paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)'
+        margin:{t:10,l:0,r:0,b:0}, paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)'
       }, {displaylogo:false, responsive:true});
 
       // Time series to current time
@@ -814,30 +870,60 @@
     const slider = $('slider'); slider.max = String(nSteps-1); slider.value = '0';
 
     let playing = false, timer = null;
-    function speedMs(){
+    function getSpeedParams(){
       const s = $('speed').value;
-      const mult = parseInt(s) || parseInt(s.replace('x','')) || 1;
-      return Math.max(20, 400 / Math.max(1,mult));
+      const mult = parseInt(s.replace('x','')) || 1;
+      
+      // Use both step size and interval to achieve different speeds
+      let stepsPerFrame, intervalMs;
+      if(mult <= 1000) {
+        stepsPerFrame = 1;
+        intervalMs = Math.max(50, 1000 / mult);
+      } else if(mult <= 10000) {
+        stepsPerFrame = Math.floor(mult / 1000);
+        intervalMs = 50;
+      } else {
+        stepsPerFrame = Math.floor(mult / 1000);
+        intervalMs = 20;
+      }
+      
+      console.log('Speed setting:', s, 'Steps per frame:', stepsPerFrame, 'Interval ms:', intervalMs);
+      return {stepsPerFrame, intervalMs};
+    }
+
+    function playStep(){
+      const {stepsPerFrame, intervalMs} = getSpeedParams();
+      
+      let i = parseInt(slider.value,10);
+      // Advance by multiple steps for higher speeds
+      i = (i + stepsPerFrame) % nSteps;
+      slider.value = String(i);
+      updateScene(i);
+      
+      if(playing) {
+        timer = setTimeout(playStep, intervalMs);
+      }
     }
 
     function play(){
       if(playing) return;
       playing = true;
-      timer = setInterval(()=>{
-        let i = parseInt(slider.value,10);
-        i = (i+1) % nSteps;
-        slider.value = String(i);
-        updateScene(i);
-      }, speedMs());
+      playStep();
     }
     function pause(){
       playing = false;
-      if(timer){ clearInterval(timer); timer=null; }
+      if(timer){ clearTimeout(timer); timer=null; }
     }
 
     $('play').onclick = ()=>{ pause(); play(); };
     $('pause').onclick = ()=>{ pause(); };
-    $('speed').onchange = ()=>{ if(playing){ pause(); play(); } };
+    $('speed').onchange = ()=>{ 
+      console.log('Speed changed, was playing:', playing);
+      if(playing){ 
+        pause(); 
+        play(); 
+      } 
+    };
     slider.oninput = ()=>{ pause(); updateScene(parseInt(slider.value,10)); };
 
     satCountSel.onchange = ()=>{
@@ -911,12 +997,12 @@
 
         renderHeatmap(
           'rms_plot_A',
-          `Tier=${tierA} · AMR=${amrA.toFixed(3)} m²/kg · Alt=${Math.round(altA)} km · F10.7=${Math.round(fA)} · Ap=${Math.round(apA)} · ρ=${fmtSI(rhoA)} kg/m³ · a_D=${fmtSI(dA)} m/s²`,
+          `POD Noise Level=${tierA} · Neutral Density=${fmtSI(rhoA)} kg/m³ · Drag acc.=${fmtSI(dA)} m/s²`,
           dataA, zmin, zmax
         );
         renderHeatmap(
           'rms_plot_B',
-          `Tier=${tierB} · AMR=${amrB.toFixed(3)} m²/kg · Alt=${Math.round(altB)} km · F10.7=${Math.round(fB)} · Ap=${Math.round(apB)} · ρ=${fmtSI(rhoB)} kg/m³ · a_D=${fmtSI(dB)} m/s²`,
+          `POD Noise Level=${tierB} · Neutral Density=${fmtSI(rhoB)} kg/m³ · Drag acc.=${fmtSI(dB)} m/s²`,
           dataB, zmin, zmax
         );
       }catch(err){
